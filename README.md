@@ -7,7 +7,7 @@ Source code and documentation to connect your SAP ERP system to the C²FO workin
 
 ## 1.  Copy the C2FO Plugin for SAP Transport Files
 
-The files and folders required to install C2FO Plugin for SAP on your SAP system are located in the `\C2FO_BaseCode_V2.0\Transports` distribution directory. These files should be copied to a working directory on your SAP server. Please note the following when performing the copy:
+The files and folders required to install C2FO Plugin for SAP on your SAP system are located in the `Transports` distribution directory. These files should be copied to a working directory on your SAP server. Please note the following when performing the copy:
 
 * For UNIX servers, you must log on as the root user ID to copy the files.  The directory to which the files are copied must have read, write and execute permissions.
 * For Windows servers, you must log on as `<SID>ADM`.  The directory to which you copy the files must be writeable.
@@ -42,5 +42,8 @@ Review the transport log for the transport files that were imported. Review this
 * [Functional specification, Outbound](https://github.com/Pollenware/C2FO-SAP-Plugin/blob/master/Specifications/FuncSpec_Interface_Outbound_V02.docx) 
 * [Technical specification, Inbound](https://github.com/Pollenware/C2FO-SAP-Plugin/blob/master/Specifications/TechSpec_Interface_Inbound_V02.docx) 
 * [Technical specification, Outbound](https://github.com/Pollenware/C2FO-SAP-Plugin/blob/master/Specifications/TechSpec_Interface_Outbound_V02.docx)
-* [SAP vendor extraction demonstration on YouTube](http://www.youtube.com/watch?v=fEM7_nYKcEg)
-* [SAP payments via F-53 demonstration on YouTube](http://www.youtube.com/watch?v=EGHlHDnNdXg)
+
+## 5 How-To videos on YouTube
+
+* [Vendor extraction demonstration](http://www.youtube.com/watch?v=fEM7_nYKcEg)
+* [Payments via F-53 demonstration](http://www.youtube.com/watch?v=EGHlHDnNdXg)

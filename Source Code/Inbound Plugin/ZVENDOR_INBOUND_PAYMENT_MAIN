@@ -1,0 +1,102 @@
+*----------------------------------------------------------------------*
+* Program Id:     ZVENDOR_INBOUND_PAYMENT_MAIN                         *
+* Program Title:  Pollenware – Interface for posting inbound payment   *
+*                 details                                              *
+* Program Type:   Executable program                                   *
+* Author:         Avinash Ravipati, Advent Global Solutions            *
+* SAP Release:    ECC 6.0                                              *
+* CR No:                                                               *
+* Date:           29/04/2012                                           *
+* Description:    This main program is to call the programs to post the*
+*                 inbound transactions based on configurator           *
+*----------------------------------------------------------------------*
+* CHANGE LOG                                                           *
+* CR Number       Date                                Author           *
+*----------------------------------------------------------------------*
+
+REPORT  zvendor_inbound_payment_main MESSAGE-ID zpollenware.
+
+INCLUDE zvendor_inbound_payment_maint.
+
+INITIALIZATION.
+
+* getting quickpay config details.
+  PERFORM fetch_config_details.
+
+START-OF-SELECTION.
+
+* call the appropriate inbound program
+  PERFORM call_inbound_program.
+
+*----------------------------------------------------------------------*
+*  Form  FETCH_CONFIG_DETAILS                                          *
+*----------------------------------------------------------------------*
+*  This subroutine is for fetching quickpay configuration details      *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM fetch_config_details .
+
+* Local work variables..................................................
+
+  DATA: lv_subrc TYPE sy-subrc.        " sy-subrc
+
+  REFRESH gt_config_file.
+
+  IF gv_config_file IS INITIAL.
+
+    CONCATENATE sy-mandt
+                c_configure
+                c_dot
+                c_csv_extension
+           INTO gv_config_file.
+  ENDIF.                               " IF GV_CONFIG_FILE IS INITIAL
+
+  OPEN DATASET gv_config_file FOR INPUT IN TEXT MODE ENCODING DEFAULT.
+
+  IF sy-subrc NE 0.
+
+    MESSAGE e030.
+
+  ENDIF.                               " IF SY-SUBRC NE 0
+
+  DO.
+    READ DATASET gv_config_file INTO gs_config_csv.
+    lv_subrc = sy-subrc.
+    IF lv_subrc NE 0.
+      EXIT.
+    ENDIF.                             " IF SY-SUBRC NE 0
+    SPLIT gs_config_csv AT c_comma
+                      INTO gs_config_file-mode
+                           gs_config_file-type.
+
+    APPEND gs_config_file TO gt_config_file.
+    CLEAR gs_config_file.
+  ENDDO.                               " IF SY-SUBRC NE 0 EXIT
+
+  CLEAR lv_subrc.
+
+  CLOSE DATASET gv_config_file.
+
+ENDFORM.                               " FETCH_CONFIG_DETAILS
+
+*----------------------------------------------------------------------*
+*  Form  CALL_INBOUND_PROGRAM                                          *
+*----------------------------------------------------------------------*
+*  This subroutine is for calling the appropriate inbound program      *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+form CALL_INBOUND_PROGRAM .
+
+  READ TABLE gt_config_file INTO gs_config_file
+                            WITH KEY mode = c_tranc.
+  IF sy-subrc EQ 0.
+    IF gs_config_file-type EQ c_f53.
+      SUBMIT zvendor_inbound_payment_f53 VIA SELECTION-SCREEN AND RETURN.
+    ELSE.
+      SUBMIT zvendor_inbound_payment_fb2 VIA SELECTION-SCREEN AND RETURN.
+    ENDIF.                             " IF GS_CONFIG_FILE-TYPE EQ ...
+  ENDIF.                               " IF SY-SUBRC EQ 0.
+
+endform.                               " CALL_INBOUND_PROGRAM

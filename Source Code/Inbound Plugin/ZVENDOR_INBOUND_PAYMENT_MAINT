@@ -1,0 +1,81 @@
+*----------------------------------------------------------------------*
+* Program Id:     ZVENDOR_INBOUND_PAYMENT_MAINT                        *
+* Program Title:  Definations for the program ZVENDOR_INBOUND_PAYMENT  *
+* Program Type:   Include                                              *
+* Author:         Avinash Ravipati, Advent Global Solutions            *
+* SAP Release:    ECC 6.0                                              *
+* CR No:                                                               *
+* Date:           29/04/2012                                           *
+* Description:    This program contains data declarations for the inte-*
+*                 rface program ZVENDOR_INBOUND_PAYMENT_MAIN           *
+*----------------------------------------------------------------------*
+* CHANGE LOG                                                           *
+* CR Number       Date                                Author           *
+*----------------------------------------------------------------------*
+
+* Type pools............................................................
+
+TYPE-POOLS:
+  truxs.                               " TR-FDU general type-pools
+
+* Types.................................................................
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the config setup data         *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_config_file,
+    mode TYPE char1,                   " Mode
+    type TYPE char3,                   " Source type
+  END OF typ_config_file.
+
+* Constants.............................................................
+
+CONSTANTS:
+  c_dot TYPE char1 VALUE '.',          " Character Dot
+  c_comma TYPE char1 VALUE ',',        " Comma
+  c_csv_extension TYPE string VALUE 'CSV',
+                                       " CSV extension
+  c_configure TYPE char18 VALUE 'Quickpay_Configure',
+                                       " Config file
+  c_tranc type char1 VALUE 'T',        " Transaction
+  c_f53 type char3 VALUE 'F53'.        " For F-53
+
+* Internal tables.......................................................
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the config setup data          *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_config_file TYPE STANDARD TABLE OF typ_config_file
+                      INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the CSV formatted data         *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_config_csv TYPE truxs_t_text_data.
+
+
+* Field strings.........................................................
+
+
+*----------------------------------------------------------------------*
+* Declaration of Field string to hold the config setup data            *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_config_file TYPE typ_config_file.
+
+
+DATA:
+  gs_config_csv LIKE LINE OF gt_config_csv.
+
+
+* Global work variables.................................................
+
+DATA:
+  gv_config_file TYPE string.          " Config data file

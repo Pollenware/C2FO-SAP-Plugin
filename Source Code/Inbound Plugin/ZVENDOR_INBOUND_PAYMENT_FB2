@@ -1,0 +1,2398 @@
+*----------------------------------------------------------------------*
+* Program Id:     ZVENDOR_INBOUND_PAYMENT_FB2                          *
+* Program Title:  Pollenware – Interface for posting inbound payment   *
+*                 details using FB02                                   *
+* Program Type:   Executable program                                   *
+* Author:         Avinash Ravipati, Advent Global Solutions            *
+* SAP Release:    ECC 6.0                                              *
+* CR No:                                                               *
+* Date:           22/03/2012                                           *
+* Description:    This program is to post the inbound transaction      *
+*                 details by using Transaction code FB02               *
+*----------------------------------------------------------------------*
+* CHANGE LOG                                                           *
+* CR Number       Date                                Author           *
+*----------------------------------------------------------------------*
+
+REPORT  zvendor_inbound_payment_fb2 MESSAGE-ID zpollenware.
+
+* Include for data declarations.
+INCLUDE zvendor_inbound_payment_fb2t.
+
+*----------------------------------------------------------------------*
+*  EVENT  INITIALIZATION                                               *
+*----------------------------------------------------------------------*
+INITIALIZATION.
+* getting timestamp.
+  PERFORM extract_startup.
+
+* validating user authorization to execute outbound extract.
+  PERFORM validate_user_authorization.
+
+* getting quickpay config details.
+  PERFORM fetch_config_details.
+
+* fetch error file path on application server
+  PERFORM fetch_error_file_path.
+
+*----------------------------------------------------------------------*
+*  EVENT  SELECTION-SCREEN OUTPUT                                      *
+*----------------------------------------------------------------------*
+
+
+AT SELECTION-SCREEN OUTPUT.
+
+* modifing the selection screen based on quickpay configuration
+  PERFORM modify_screen.
+
+
+*----------------------------------------------------------------------*
+*  EVENT  SELECTION-SCREEN ON VALUE-REQUEST                            *
+*----------------------------------------------------------------------*
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_dfile.
+
+* f4 help for inbound file
+  PERFORM browse_for_file .
+
+*----------------------------------------------------------------------*
+*  EVENT  SELECTION-SCREEN                                             *
+*----------------------------------------------------------------------*
+
+AT SELECTION-SCREEN.
+
+* to validate error file application server path
+  PERFORM check_path_appserver USING p_efpath.
+
+* to validate log file application server path
+  PERFORM check_path_appserver USING p_lfpath.
+
+*----------------------------------------------------------------------*
+*  EVENT  AT SELECTION-SCREEN                                          *
+*----------------------------------------------------------------------*
+
+START-OF-SELECTION.
+
+* checking input values for PAI
+  PERFORM check_input_pai.
+
+* fetching data from source based on quickpay configuration
+  PERFORM fetch_data_from_source.
+
+* formatting the input data
+  PERFORM format_data.
+
+*----------------------------------------------------------------------*
+*  EVENT  END-OF-SELECTION                                             *
+*----------------------------------------------------------------------*
+
+END-OF-SELECTION.
+
+* Create log file on app server at given path.
+  PERFORM create_inbound_log.
+
+* Central LOG file on Application Server.
+  PERFORM create_appserver_log.
+
+*----------------------------------------------------------------------*
+*  Form  FTP_CONNECTION_OPEN                                           *
+*----------------------------------------------------------------------*
+*  Subroutine is for getting the password encryption string            *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM ftp_connection_open.
+
+* Local work variables..................................................
+  DATA: lv_slen TYPE i,                " String length
+        lv_string TYPE string,         " text string
+        lv_key TYPE i VALUE 26101957.  " Key
+
+  CONCATENATE c_ftp
+              gv_host
+         INTO gv_ftp_path.
+
+  lv_slen = STRLEN( gv_pass ).
+
+  CALL FUNCTION 'HTTP_SCRAMBLE'
+    EXPORTING
+      SOURCE      = gv_pass
+      sourcelen   = lv_slen
+      key         = lv_key
+    IMPORTING
+      destination = gv_pass.
+
+  CALL FUNCTION 'FTP_CONNECT'
+    EXPORTING
+      user            = gv_user
+      password        = gv_pass
+      host            = gv_host
+      rfc_destination = gv_rfc
+    IMPORTING
+      handle          = gv_hdl.
+*    EXCEPTIONS
+*      not_connected   = 1
+*      OTHERS          = 2.
+
+  IF gv_hdl EQ 0.
+    MESSAGE i010 WITH gv_ftp_path.
+    lv_string = text-ucf.
+    REPLACE ALL OCCURRENCES OF c_p1
+                            IN lv_string
+                          WITH gv_ftp_path.
+* filling the process details for extract log
+    PERFORM fill_process_details USING lv_string.
+    CLEAR lv_string.
+
+    gv_status = text-fal.
+* LOG file on Application Server.
+    PERFORM create_appserver_log.
+    LEAVE PROGRAM.
+  ENDIF.                               " IF GV_HD1 EQ 0.
+
+  IF sy-subrc EQ 0.
+    MESSAGE s009 WITH gv_ftp_path.
+    lv_string = text-scf.
+    REPLACE ALL OCCURRENCES OF c_p1
+                            IN lv_string
+                          WITH gv_ftp_path.
+* filling the process details for extract log
+    PERFORM fill_process_details USING lv_string.
+    CLEAR lv_string.
+  ELSE.
+    MESSAGE i010 WITH gv_ftp_path.
+    lv_string = text-ucf.
+    REPLACE ALL OCCURRENCES OF c_p1
+                            IN lv_string
+                          WITH gv_ftp_path.
+* filling the process details for extract log
+    PERFORM fill_process_details USING lv_string.
+    CLEAR lv_string.
+
+    gv_status = text-fal.
+* LOG file on Application Server.
+    PERFORM create_appserver_log.
+    LEAVE PROGRAM.
+  ENDIF.                               " IF SY-SUBRC EQ 0
+
+ENDFORM.                               " FTP_CONNECTION_OPEN
+
+*----------------------------------------------------------------------*
+*  Form  FETCH_FILE_FROM_FTP                                           *
+*----------------------------------------------------------------------*
+*  Subroutine is for fetching the file from                            *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM fetch_file_from_ftp.
+
+* Local work variables..................................................
+  DATA: lv_flag TYPE char1
+               VALUE c_flag_off,       " Flag
+        lv_length TYPE i,              " String length
+        lv_relength TYPE i,            " File name length
+        lv_string TYPE string,         " Text string
+        lv_char TYPE char1,            " Character
+        lv_ser_name TYPE msxxlist-name." Server name
+
+* Local field strings...................................................
+  DATA: BEGIN OF ls_result,
+          line(100) TYPE c,            " string
+        END OF ls_result.
+* Local tables .........................................................
+  DATA lt_result LIKE STANDARD TABLE
+                   OF ls_result.
+
+  IF gv_cmd_ftppath IS NOT INITIAL.
+    lv_string = gv_cmd_ftppath+0(1).
+    IF lv_string NE c_back_slash.
+      CONCATENATE c_back_slash
+                gv_cmd_ftppath
+           INTO gv_cmd_ftppath.
+    ENDIF.                             " IF LV_STRING NE C_BACK_SLASH.
+
+    CONCATENATE gv_cmd_cd
+                gv_cmd_ftppath
+           INTO gv_cmd SEPARATED BY space.
+
+    REPLACE ALL OCCURRENCES OF c_back_slash
+                          IN gv_cmd_ftppath
+                        WITH c_farw_slash.
+    CONCATENATE c_ftp
+              gv_host
+              gv_cmd_ftppath
+         INTO gv_ftp_path.
+
+    PERFORM ftp_command CHANGING lv_flag
+                               lt_result.
+    REFRESH lt_result.
+    CLEAR: lv_flag,
+           lv_string.
+
+  ENDIF.                               " GV_CMD_FTPPATH IS NOT INITIAL.
+
+  gv_cmd = gv_cmd_ascii.
+
+  CLEAR lv_flag.
+
+  PERFORM ftp_command CHANGING lv_flag
+                               lt_result.
+  CLEAR lv_flag.
+  REFRESH lt_result.
+
+  gv_cmd = gv_cmd_dir.
+
+  PERFORM ftp_command CHANGING lv_flag
+                               lt_result.
+
+  IF lv_flag EQ c_flag_on.
+    LOOP AT lt_result INTO ls_result FROM 4.
+      lv_char = ls_result+0(1).
+      IF lv_char EQ c_hyphen.
+        IF ls_result-line CS c_award.
+          lv_length = STRLEN( ls_result-line ).
+          lv_relength = lv_length - 49.
+          IF p_fname IS INITIAL.
+            p_fname = ls_result-line+49(lv_relength).
+          ENDIF.                       " IF P_FNAME IS INITIAL.
+          EXIT.
+        ELSE.
+          lv_string = text-anf.
+          REPLACE ALL OCCURRENCES OF c_p1
+                                  IN lv_string
+                                WITH gv_ftp_path.
+* filling the process details for extract log
+          PERFORM fill_process_details USING lv_string.
+          gv_status = text-fal.
+
+* LOG file on Application Server.
+          PERFORM create_appserver_log.
+
+          MESSAGE e026 WITH gv_ftp_path.
+          CLEAR lv_string.
+        ENDIF.                         " IF LS_RESULT-LINE CS C_CSV.
+      ENDIF.                           " IF LV_CHAR EQ C_HYPHEN.
+    ENDLOOP.                           " LOOP AT LT_RESULT INTO ...
+    IF p_fname IS INITIAL.
+      lv_string = text-anf.
+      REPLACE ALL OCCURRENCES OF c_p1
+                              IN lv_string
+                            WITH gv_ftp_path.
+* filling the process details for extract log
+      PERFORM fill_process_details USING lv_string.
+      gv_status = text-fal.
+
+* LOG file on Application Server.
+      PERFORM create_appserver_log.
+
+      MESSAGE e026 WITH gv_ftp_path.
+      CLEAR lv_string.
+    ENDIF.                             " IF P_FNAME IS INITIAL.
+  ENDIF.                               " IF LV_FLAG EQ C_FLAG_ON.
+  REFRESH lt_result.
+
+  CONCATENATE gv_cmd_lcd
+              gv_ftp_app_path
+         INTO gv_cmd SEPARATED BY space.
+
+  CLEAR lv_flag.
+
+  PERFORM ftp_command CHANGING lv_flag
+                               lt_result.
+  REFRESH lt_result.
+
+  CONCATENATE gv_cmd_get
+              p_fname
+         INTO gv_cmd SEPARATED BY space.
+
+  CLEAR lv_flag.
+
+  PERFORM ftp_command CHANGING lv_flag
+                               lt_result.
+  REFRESH lt_result.
+
+  IF lv_flag EQ c_flag_on.
+    MESSAGE s011 WITH p_fname gv_ftp_path.
+
+    CALL FUNCTION 'GENERAL_GET_APP_SERVER_NAME'
+      IMPORTING
+        server_name = lv_ser_name.
+
+    MESSAGE s013 WITH lv_ser_name.
+
+    lv_string = text-stf.
+    REPLACE ALL OCCURRENCES OF c_p1
+                            IN lv_string
+                          WITH lv_ser_name.
+
+* filling the process details for extract log
+    PERFORM fill_process_details USING lv_string.
+    CLEAR lv_string.
+  ELSE.
+
+    lv_string = text-uff.
+
+    REPLACE ALL OCCURRENCES OF c_p1
+                            IN lv_string
+                          WITH p_fname.
+
+    REPLACE ALL OCCURRENCES OF c_p2
+                            IN lv_string
+                          WITH gv_ftp_path.
+
+* filling the process details for extract log
+    PERFORM fill_process_details USING lv_string.
+    gv_status = text-fal.
+
+* LOG file on Application Server.
+    PERFORM create_appserver_log.
+
+    MESSAGE i012 WITH p_fname gv_ftp_path.
+    LEAVE PROGRAM.
+
+  ENDIF.                               " IF LV_FLAG EQ C_FLAG_ON
+
+ENDFORM.                               " FETCH_FILE_FROM_FTP
+
+*----------------------------------------------------------------------*
+*  Form  FTP_COMMAND                                                   *
+*----------------------------------------------------------------------*
+*  Subroutine is for ftp connection and fetch file from ftp            *
+*----------------------------------------------------------------------*
+*  <-- cv_flag  -  flag variable                                       *
+*----------------------------------------------------------------------*
+FORM ftp_command CHANGING cv_flag TYPE char1
+                          cv_table TYPE STANDARD TABLE.
+
+
+  cv_flag = c_flag_off.
+
+  IF gv_cmd NE space.
+
+    CALL FUNCTION 'FTP_COMMAND'
+      EXPORTING
+        handle                = gv_hdl
+        command               = gv_cmd
+        compress              = gv_compress
+        rfc_destination       = gv_rfc
+*     VERIFY                =
+*   IMPORTING
+*     FILESIZE              =
+*     FILEDATE              =
+*     FILETIME              =
+      TABLES
+        data                  = cv_table
+      EXCEPTIONS
+        tcpip_error           = 1
+        command_error         = 2
+        data_error            = 3
+        OTHERS                = 4
+              .
+    IF sy-subrc EQ 0.
+      cv_flag = c_flag_on.
+    ENDIF.                             " IF SY-SUBRC EQ 0
+
+    CLEAR gv_cmd.
+
+  ENDIF.                               " IF GV_CMD NE SPACE.
+
+ENDFORM.                               " FTP_COMMAND
+
+*----------------------------------------------------------------------*
+*  Form  FTP_CONNECTION_CLOSE                                          *
+*----------------------------------------------------------------------*
+*  Subroutine is for disconnect and close the ftp connection           *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM ftp_connection_close .
+
+  CALL FUNCTION 'FTP_DISCONNECT'
+    EXPORTING
+      handle = gv_hdl.
+
+  CALL FUNCTION 'RFC_CONNECTION_CLOSE'
+    EXPORTING
+      destination = gv_rfc.
+
+ENDFORM.                               " FTP_CONNECTION_CLOSE
+
+*----------------------------------------------------------------------*
+*  Form  VALIDATE_USER_AUTHORIZATION                                   *
+*----------------------------------------------------------------------*
+*  Subroutine for validating user authorization to execute outbound    *
+*  extract.                                                            *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM validate_user_authorization.
+
+  AUTHORITY-CHECK OBJECT 'ZVEND_INB' FOR USER sy-uname
+                      ID 'ACTVT' FIELD '01'.
+  CLEAR gs_process_details.
+
+  IF sy-subrc NE 0.
+
+* filling the process details for extract log
+    PERFORM fill_process_details USING text-uaf.
+    gv_status = text-fua.
+
+* LOG file on Application Server.
+    PERFORM create_appserver_log.
+
+    MESSAGE i000.
+    LEAVE PROGRAM.
+  ELSE.
+* filling the process details for extract log
+    PERFORM fill_process_details USING text-uas.
+  ENDIF.                               " IF SY_SUBRC NE 0
+
+ENDFORM.                               " VALIDATE_USER_AUTHORIZATION
+
+*----------------------------------------------------------------------*
+*  Form  FETCH_DATA_FROM_SERVER                                        *
+*----------------------------------------------------------------------*
+*  This subroutine is for fetching the file data from app server       *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM fetch_data_from_server .
+
+* Local work variables..................................................
+  DATA:
+    lv_subrc TYPE sysubrc,             " Return Value of ABAP Statements
+    lv_string TYPE string,             " Text string
+    lv_sreccount TYPE char10,          " Number of records
+    lv_reccount TYPE i,                " Number of records
+    lv_length TYPE i,                  " Length
+    lv_char TYPE char1,                " Character
+    lv_slash TYPE char1,               " Slash type in path
+    lv_name TYPE salfile-longname.     " App server file path
+
+  DATA:
+    lt_filelist TYPE STANDARD TABLE OF
+                              salfldir." Directory of Files
+
+  DATA:
+    ls_filelist LIKE LINE OF lt_filelist.
+  " Field string of directory files
+
+  IF gv_as_path IS NOT INITIAL.
+    lv_length = STRLEN( gv_as_path ).
+    lv_length = lv_length - 1.
+    lv_char = gv_as_path+lv_length(1).
+
+    IF p_fname IS INITIAL.
+      lv_name = gv_as_path.
+
+      CALL FUNCTION 'RZL_READ_DIR_LOCAL'
+        EXPORTING
+          name           = lv_name
+        TABLES
+          file_tbl       = lt_filelist
+        EXCEPTIONS
+          argument_error = 1
+          not_found      = 2
+          OTHERS         = 3.
+      IF sy-subrc EQ 0.
+        IF lt_filelist IS NOT INITIAL.
+          READ TABLE lt_filelist INTO ls_filelist INDEX 1.
+          LOOP AT lt_filelist INTO ls_filelist FROM 3.
+            IF ls_filelist-name CS c_award.
+              p_fname = ls_filelist-name.
+              EXIT.
+            ENDIF.                     " IF ls_filelist-name CS c_award.
+          ENDLOOP.                     " LOOP AT lt_filelist into ...
+          IF p_fname IS INITIAL.
+            lv_string = text-ans.
+            REPLACE ALL OCCURRENCES OF c_p1
+                                    IN lv_string
+                                  WITH gv_as_path.
+* filling the process details for extract log
+            PERFORM fill_process_details USING lv_string.
+            gv_status = text-fal.
+
+* LOG file on Application Server.
+            PERFORM create_appserver_log.
+
+            MESSAGE e027 WITH gv_as_path.
+            CLEAR lv_string.
+          ENDIF.                       " IF P_FNAME IS INITIAL.
+        ELSE.
+          lv_string = text-ans.
+          REPLACE ALL OCCURRENCES OF c_p1
+                                  IN lv_string
+                                WITH gv_as_path.
+* filling the process details for extract log
+          PERFORM fill_process_details USING lv_string.
+          gv_status = text-fal.
+
+* LOG file on Application Server.
+          PERFORM create_appserver_log.
+
+          MESSAGE e027 WITH gv_as_path.
+          CLEAR lv_string.
+        ENDIF.                         " IF LT_FILELIST IS NOT initial
+      ELSE.
+        lv_string = text-api.
+        REPLACE ALL OCCURRENCES OF c_p1
+                                IN lv_string
+                              WITH gv_as_path.
+* filling the process details for extract log
+        PERFORM fill_process_details USING lv_string.
+        gv_status = text-fal.
+
+* LOG file on Application Server.
+        PERFORM create_appserver_log.
+
+        MESSAGE e021 WITH gv_as_path.
+        CLEAR lv_string.
+      ENDIF.                           " IF SY-SUBRC EQ 0.
+    ENDIF.                             " IF P_FNAME IS INITIAL.
+
+    IF gv_as_path CA c_farw_slash.
+      lv_slash = c_farw_slash.
+    ELSE.
+      lv_slash = c_back_slash.
+    ENDIF.                             " IF P_DPATH CA C_FARW_SLASH.
+
+    IF lv_char EQ lv_slash.
+      CONCATENATE gv_as_path
+                  p_fname
+             INTO gv_dataset.
+    ELSE.
+      CONCATENATE gv_as_path
+                  lv_slash
+                  p_fname
+             INTO gv_dataset.
+    ENDIF.                             " IF LV_CHAR EQ LV_SLASH.
+  ELSE.
+    gv_dataset = p_fname.
+  ENDIF.                               " IF GV_AS_PATH IS NOT INITIAL.
+
+  OPEN DATASET gv_dataset FOR INPUT IN TEXT MODE ENCODING DEFAULT.
+
+  IF sy-subrc NE 0.
+
+* filling the process details for extract log
+    PERFORM fill_process_details USING text-uaa.
+
+    gv_status = text-fal.
+
+* LOG file on Application Server.
+    PERFORM create_appserver_log.
+
+    MESSAGE e030.
+
+  ELSE.
+    IF gv_as EQ c_flag_on.
+      lv_string = text-apv.
+      REPLACE ALL OCCURRENCES OF c_p1
+                              IN lv_string
+                            WITH gv_dataset.
+* filling the process details for extract log
+      PERFORM fill_process_details USING lv_string.
+      CLEAR lv_string.
+    ENDIF.                             " IF GV_AS EQ C_FLAG_ON.
+  ENDIF.                               " IF SY-SUBRC NE 0
+
+*  READ DATASET gv_dataset INTO gs_file_data.
+
+  DO.
+    READ DATASET gv_dataset INTO gs_file_data.
+    lv_subrc = sy-subrc.
+    IF lv_subrc NE 0.
+      EXIT.
+    ENDIF.                             " IF SY-SUBRC NE 0
+
+    SPLIT gs_file_data AT c_comma
+                     INTO gs_payment_data-pbid
+                          gs_payment_data-pbnam
+                          gs_payment_data-xblnr
+                          gs_payment_data-lifnr
+                          gs_payment_data-bsnam
+                          gs_payment_data-belnr
+                          gs_payment_data-invid
+                          gs_payment_data-bktxt
+                          gs_payment_data-wrbtr
+                          gs_payment_data-basid
+                          gs_payment_data-sgtxt
+                          gs_payment_data-disc
+                          gs_payment_data-inco
+                          gs_payment_data-oamt
+                          gs_payment_data-bldat
+                          gs_payment_data-pterm
+                          gs_payment_data-waers
+                          gs_payment_data-payamt
+                          gs_payment_data-valut
+                          gs_payment_data-doctyp
+                          gs_payment_data-bmtid
+                          gs_payment_data-btde
+                          gs_payment_data-sgrp
+                          gs_payment_data-zuonr.
+
+    IF sy-subrc EQ 0.
+      APPEND gs_payment_data TO gt_payment_data.
+      CLEAR gs_payment_data.
+    ELSE.
+* filling the process details for extract log
+      PERFORM fill_process_details USING text-afi.
+
+      gv_status = text-fal.
+* LOG file on Application Server.
+      PERFORM create_appserver_log.
+      MESSAGE e029.
+    ENDIF.                             " IF SY-SUBRC EQ 0.
+
+  ENDDO.                               " IF SY-SUBRC NE 0 EXIT
+
+  CLOSE DATASET gv_dataset.
+
+  DESCRIBE TABLE gt_payment_data LINES lv_reccount.
+
+  lv_reccount = lv_reccount - 1.
+
+  MESSAGE s014 WITH lv_reccount p_fname.
+
+  lv_string = text-nrf.
+
+  lv_sreccount = lv_reccount.
+
+  CONDENSE lv_sreccount NO-GAPS.
+  REPLACE ALL OCCURRENCES OF c_p1
+                          IN lv_string
+                        WITH lv_sreccount.
+
+  REPLACE ALL OCCURRENCES OF c_p2
+                          IN lv_string
+                        WITH p_fname.
+
+* filling the process details for extract log
+  PERFORM fill_process_details USING lv_string.
+
+ENDFORM.                               " FETCH_DATA_FROM_SERVER
+
+*----------------------------------------------------------------------*
+*  Form  BDC_DYNPRO                                                    *
+*----------------------------------------------------------------------*
+*  This subroutine is for Start new screen                             *
+*----------------------------------------------------------------------*
+*  --> iv_program  -  program name                                     *
+*  --> iv_dynpro   -  screen number                                    *
+*----------------------------------------------------------------------*
+FORM bdc_dynpro USING iv_program TYPE bdcdata-program
+                      iv_dynpro TYPE bdcdata-dynpro.
+  CLEAR gs_bdc_data.
+  gs_bdc_data-program  = iv_program.
+  gs_bdc_data-dynpro   = iv_dynpro.
+  gs_bdc_data-dynbegin = 'X'.
+  APPEND gs_bdc_data TO gt_bdc_data.
+ENDFORM.                               " BDC_DYNPRO
+
+*----------------------------------------------------------------------*
+*  Form  BDC_FIELD                                                     *
+*----------------------------------------------------------------------*
+*  This subroutine is for Insert field                                 *
+*----------------------------------------------------------------------*
+*  --> iv_fnam  -  field name                                          *
+*  --> iv_fval  -  field value                                         *
+*----------------------------------------------------------------------*
+FORM bdc_field USING iv_fnam TYPE any
+                     iv_fval TYPE any.
+  CLEAR gs_bdc_data.
+  gs_bdc_data-fnam = iv_fnam.
+  gs_bdc_data-fval = iv_fval.
+  APPEND gs_bdc_data TO gt_bdc_data.
+ENDFORM.                               " BDC_FIELD
+
+*----------------------------------------------------------------------*
+*  Form  FORMAT_DATA                                                   *
+*----------------------------------------------------------------------*
+*  This subroutine is for formatting the input data                    *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM format_data .
+
+* Local work variables..................................................
+  DATA: lv_belnr TYPE bkpf-belnr,      " Invoice number
+        lv_gjahr TYPE bkpf-gjahr,      " Fiscal year
+        lv_wrbtr TYPE bseg-wrbtr,      " Amount
+        lv_index TYPE sy-tabix,        " tabix
+        lv_hbkid TYPE t042i-hbkid,     " Bank Key
+        lv_hktid TYPE t042i-hktid,     " ID for account details
+        lv_country TYPE t001-land1,    " Country code
+        lv_pmt_mtd TYPE t042z-zlsch,   " Payment method
+        lv_mtd_name TYPE t042z-text1,  " Payment method description
+        lv_string TYPE string,         " String
+        lv_doctype TYPE char18,        " Document Type
+        lv_pwdis TYPE char6,       " Discount
+        lv_disamt TYPE char16,         " Discount amount
+        lv_dis TYPE char6,         " Discount
+        lv_discount TYPE bseg-zbd1p,
+        lv_tot_dis TYPE bseg-zbd1p.   " Discount
+
+  DATA: lt_bkdf TYPE STANDARD TABLE
+                  OF bkdf
+        INITIAL SIZE 0,
+        lt_bkpf TYPE STANDARD TABLE
+                  OF bkpf
+        INITIAL SIZE 0,
+        lt_bsec TYPE STANDARD TABLE
+                  OF bsec
+        INITIAL SIZE 0,
+        lt_bsed TYPE STANDARD TABLE
+                  OF bsed
+        INITIAL SIZE 0,
+        lt_bseg TYPE STANDARD TABLE
+                  OF bseg
+        INITIAL SIZE 0,
+        lt_bset TYPE STANDARD TABLE
+                  OF bset
+        INITIAL SIZE 0,
+        lt_bseg_add TYPE STANDARD TABLE
+                      OF bseg_add
+            INITIAL SIZE 0.
+
+  DATA: ls_bkpf TYPE bkpf,
+        ls_bseg TYPE bseg,
+        ls_bset TYPE bset.
+
+  DATA ls_accchg TYPE accchg.
+
+  DATA lt_accchg TYPE STANDARD TABLE OF accchg.
+
+  DATA: lv_zbd1t TYPE dzbd1t,
+        lv_zbd2t TYPE dzbd2t,
+        lv_zbd3t TYPE dzbd3t,
+        lv_aworg TYPE aworg,
+        lv_days TYPE i.
+
+  DATA: lv_invid TYPE rf05a-sel01,     " Invoice ID
+        lv_lifnr TYPE lfb1-lifnr,      " Vendor Number
+        lv_hbank TYPE char13,          " House bank
+        lv_fname TYPE string,          " String
+        lv_row TYPE char2,             " Row number
+        lv_msg TYPE string,            " message
+        lv_lines TYPE i,               " no. of records
+        lv_error_lines TYPE i.         " of Error line
+
+  DATA: BEGIN OF ls_lifnr,
+          lifnr TYPE lfb1-lifnr,             " Vendor Number
+        END OF ls_lifnr.
+
+  DATA ls_lifnr_temp LIKE ls_lifnr.
+
+  DATA lt_lifnr LIKE STANDARD TABLE OF ls_lifnr.
+
+  CLEAR: gv_tot_amt,
+         gv_tot_dis.
+
+  lv_gjahr = sy-datum+0(4).
+
+
+  LOOP AT gt_payment_data INTO gs_payment_data.
+
+    CLEAR ls_lifnr.
+
+    IF sy-tabix NE 1.
+* removing the double quotations
+      PERFORM remove_double_quotations CHANGING gs_payment_data-lifnr.
+
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = gs_payment_data-lifnr
+        IMPORTING
+          output = ls_lifnr-lifnr.
+
+      READ TABLE lt_lifnr INTO ls_lifnr_temp
+                      WITH KEY lifnr = ls_lifnr-lifnr.
+      IF sy-subrc NE 0.
+        APPEND ls_lifnr TO lt_lifnr.
+      ENDIF.
+
+    ENDIF.
+  ENDLOOP.
+
+  SELECT lifnr                         " Vendor Number
+         bukrs                         " Comapany Code
+  FROM lfb1
+  INTO TABLE gt_company_codes
+  FOR ALL ENTRIES IN lt_lifnr
+ WHERE lifnr EQ lt_lifnr-lifnr.
+
+  IF gt_company_codes IS INITIAL.
+
+* filling the process details for extract log
+    PERFORM fill_process_details USING text-ncf.
+
+    gv_status = text-fal.
+* LOG file on Application Server.
+    PERFORM create_appserver_log.
+    MESSAGE e025.
+
+  ENDIF.                               " IF GT_COMAPNY_CODES IS INITIAL.
+
+  LOOP AT gt_payment_data INTO gs_payment_data.
+
+    CLEAR gs_payment_bdcdata.
+
+    IF sy-tabix NE 1.
+
+* removing the double quotations
+      PERFORM remove_double_quotations CHANGING gs_payment_data-lifnr.
+
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = gs_payment_data-lifnr
+        IMPORTING
+          output = gs_payment_bdcdata-lifnr.
+
+      READ TABLE gt_vendor WITH
+                      TABLE KEY lifnr = gs_payment_bdcdata-lifnr
+                           INTO gs_vendor.
+      IF sy-subrc NE 0.
+
+        gs_vendor-lifnr = gs_payment_bdcdata-lifnr.
+
+        INSERT gs_vendor INTO TABLE gt_vendor.
+      ENDIF.
+
+* removing the double quotations
+      PERFORM remove_double_quotations CHANGING gs_payment_data-xblnr.
+      gs_payment_bdcdata-xblnr  = gs_payment_data-xblnr.
+
+      gs_payment_bdcdata-budat  = sy-datum.
+
+* removing the double quotations
+      PERFORM remove_double_quotations CHANGING gs_payment_data-waers.
+      gs_payment_bdcdata-waers  = gs_payment_data-waers.
+      gs_payment_bdcdata-blart  = 'KZ'.
+      gs_payment_bdcdata-valut  = gs_payment_data-valut.
+* changing the date format mm/dd/yyyy to into user specific
+      PERFORM date_format_userspec CHANGING gs_payment_bdcdata-valut.
+* removing the double quotations
+      PERFORM remove_double_quotations CHANGING gs_payment_data-bktxt.
+      gs_payment_bdcdata-bktxt  = gs_payment_data-bktxt.
+      gs_payment_bdcdata-wrbtr  = gs_payment_data-wrbtr.
+
+      TRY.
+          IF gv_tot_over IS INITIAL.
+            gv_tot_amt = gv_tot_amt + gs_payment_bdcdata-wrbtr.
+          ENDIF.
+        CATCH cx_sy_arithmetic_overflow.
+          gv_tot_over = text-vor.
+      ENDTRY.
+
+      lv_discount = gs_payment_data-disc.
+
+      gs_payment_bdcdata-disc   = ( gs_payment_data-wrbtr / 100 ) *
+                                    gs_payment_data-disc.
+
+      gv_tot_dis = gv_tot_dis + gs_payment_bdcdata-disc.
+
+      gs_payment_bdcdata-bldat  = gs_payment_data-bldat.
+* changing the date format mm/dd/yyyy into user specific
+      PERFORM date_format_userspec CHANGING gs_payment_bdcdata-bldat.
+* removing the double quotations
+      PERFORM remove_double_quotations CHANGING gs_payment_data-belnr.
+
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = gs_payment_data-belnr
+        IMPORTING
+          output = gs_payment_bdcdata-belnr.
+
+* removing the double quotations
+      PERFORM remove_double_quotations CHANGING gs_payment_data-invid.
+      gs_payment_bdcdata-invid  = gs_payment_data-invid.
+* removing the double quotations
+      PERFORM remove_double_quotations CHANGING gs_payment_data-sgtxt.
+      gs_payment_bdcdata-sgtxt  = gs_payment_data-sgtxt.
+* removing the double quotations
+      PERFORM remove_double_quotations CHANGING gs_payment_data-zuonr.
+      gs_payment_bdcdata-zuonr  = gs_payment_data-zuonr.
+* removing the double quotations
+      PERFORM remove_double_quotations CHANGING gs_payment_data-doctyp.
+
+      lv_doctype = gs_payment_data-doctyp.
+
+      TRANSLATE lv_doctype TO UPPER CASE.
+
+      IF lv_doctype CS 'CREDIT'.
+        gs_payment_data-doctyp = 'C'.
+      ELSE.
+        gs_payment_data-doctyp = 'I'.
+      ENDIF.
+
+      CLEAR lv_doctype.
+
+      gs_payment_bdcdata-doctyp = gs_payment_data-doctyp.
+
+      gs_reference-doctyp = gs_payment_bdcdata-doctyp.
+
+      READ TABLE gt_company_codes INTO gs_company_codes
+                              WITH KEY lifnr = gs_payment_bdcdata-lifnr.
+
+      gs_payment_bdcdata-bukrs = gs_company_codes-bukrs.
+
+
+      PERFORM fill_bkpf USING gs_payment_bdcdata-bukrs
+                              gs_payment_bdcdata-belnr
+                              lv_gjahr
+                     CHANGING lt_bkpf.
+
+      CLEAR: ls_bkpf,
+             ls_bseg.
+
+      IF lt_bkpf IS NOT INITIAL.
+
+        READ TABLE lt_bkpf INTO ls_bkpf INDEX 1.
+
+        PERFORM fill_bseg USING gs_payment_bdcdata-bukrs
+                                gs_payment_bdcdata-belnr
+                                lv_gjahr
+                       CHANGING lt_bseg.
+
+        READ TABLE lt_bseg INTO ls_bseg
+                       WITH KEY koart = 'K'.
+
+        CALL FUNCTION 'MRM_PAYMENT_TERMS_GET'
+          EXPORTING
+            if_zterm       = ls_bseg-zterm
+            if_bldat       = ls_bkpf-bldat
+            if_budat       = ls_bkpf-budat
+            if_zfbdt       = ls_bseg-zfbdt
+          IMPORTING
+*           EF_ZFBDT       =
+            ef_zbd1t       = lv_zbd1t
+*            EF_ZBD1P       = lv_zbd1p
+            ef_zbd2t       = lv_zbd2t
+*            EF_ZBD2P       = lv_zbd2p
+            ef_zbd3t       = lv_zbd3t
+*           EF_ZLSCH       =
+*           EF_ZLSPR       =
+                  .
+
+* Call transaction method
+
+        REFRESH gt_bdc_data.
+
+        PERFORM bdc_dynpro      USING 'SAPMF05L'
+                                      '0100'.
+        PERFORM bdc_field       USING 'BDC_CURSOR'
+                                      'RF05L-GJAHR'.
+        PERFORM bdc_field       USING 'BDC_OKCODE'
+                                      '=AZ'.
+        PERFORM bdc_field       USING 'RF05L-BELNR'
+                                      gs_payment_bdcdata-belnr.
+        PERFORM bdc_field       USING 'RF05L-BUKRS'
+                                      gs_payment_bdcdata-bukrs.
+        PERFORM bdc_field       USING 'RF05L-GJAHR'
+                                      lv_gjahr.
+
+        PERFORM bdc_dynpro      USING 'SAPMF05L'
+                                      '0302'.
+        PERFORM bdc_field       USING 'BDC_CURSOR'
+                                      'BSEG-ZBD1P'.
+        PERFORM bdc_field       USING 'BDC_OKCODE'
+                                      '/00'.
+
+        lv_days = sy-datum - ls_bseg-zfbdt.
+
+        IF lv_days LE lv_zbd1t.
+
+          lv_tot_dis = ls_bseg-zbd1p + lv_discount.
+
+          gs_payment_bdcdata-disc   = ( gs_payment_data-wrbtr / 100 ) *
+                                        lv_tot_dis.
+
+          WRITE gs_payment_bdcdata-disc TO lv_disamt.
+
+        ELSEIF lv_days LE lv_zbd2t.
+
+          lv_tot_dis = ls_bseg-zbd2p + lv_discount.
+
+          gs_payment_bdcdata-disc   = ( gs_payment_data-wrbtr / 100 ) *
+                                        lv_tot_dis.
+
+          WRITE gs_payment_bdcdata-disc TO lv_disamt.
+
+        ELSE.
+
+          WRITE gs_payment_bdcdata-disc TO lv_disamt.
+
+        ENDIF.
+
+        PERFORM bdc_field       USING 'BSEG-WSKTO'
+                                      lv_disamt.
+
+        PERFORM bdc_dynpro      USING 'SAPMF05L'
+                                      '0302'.
+        PERFORM bdc_field       USING 'BDC_CURSOR'
+                                      'BSEG-SKFBT'.
+        PERFORM bdc_field       USING 'BDC_OKCODE'
+                                      '=AE'.
+        PERFORM bdc_field       USING 'BSEG-WSKTO'
+                                      lv_disamt.
+
+        REFRESH gt_bdc_messages.
+
+        CALL TRANSACTION 'FB02' USING gt_bdc_data
+                                MODE 'N'
+                                UPDATE 'S'
+                                MESSAGES INTO gt_bdc_messages.
+
+        CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+*         EXPORTING
+*           WAIT          =
+*         IMPORTING
+*           RETURN        =
+                    .
+
+
+        CLEAR: lt_bseg,
+               ls_bseg,
+               lt_bset,
+               ls_bset.
+
+        PERFORM fill_bseg USING gs_payment_bdcdata-bukrs
+                                gs_payment_bdcdata-belnr
+                                lv_gjahr
+                       CHANGING lt_bseg.
+        PERFORM fill_bset USING gs_payment_bdcdata-bukrs
+                                gs_payment_bdcdata-belnr
+                                lv_gjahr
+                       CHANGING lt_bset.
+
+        READ TABLE lt_bseg INTO ls_bseg
+                       WITH KEY koart = 'K'.
+
+        IF lv_days LE lv_zbd1t.
+
+          ls_bseg-zbd2p = lv_discount.
+          ls_bseg-zbd1p = ls_bseg-zbd1p + lv_discount.
+          CLEAR: ls_bseg-zbd1t,
+                 ls_bseg-zbd2t,
+                 ls_bseg-zbd3t.
+
+
+        ELSEIF lv_days LE lv_zbd2t.
+
+          ls_bseg-zbd1p = ls_bseg-zbd2p + lv_discount.
+          ls_bseg-zbd2p = lv_discount.
+          CLEAR: ls_bseg-zbd1t,
+                 ls_bseg-zbd2t,
+                 ls_bseg-zbd3t.
+
+        ELSE.
+
+          ls_bseg-zbd2p = lv_discount.
+          ls_bseg-zbd1p = lv_discount.
+          CLEAR: ls_bseg-zbd1t,
+                 ls_bseg-zbd2t,
+                 ls_bseg-zbd3t.
+
+        ENDIF.
+
+        ls_bseg-zterm = '0001'.
+        ls_bseg-dtws1 = '77'.
+
+        MODIFY lt_bseg FROM ls_bseg INDEX sy-tabix.
+
+        CALL FUNCTION 'CHANGE_DOCUMENT'
+          TABLES
+            t_bkdf           = lt_bkdf
+            t_bkpf           = lt_bkpf
+            t_bsec           = lt_bsec
+            t_bsed           = lt_bsed
+            t_bseg           = lt_bseg
+            t_bset           = lt_bset
+*           T_BSEG_ADD       =
+                  .
+
+        CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+*         EXPORTING
+*           WAIT          =
+*         IMPORTING
+*           RETURN        =
+                  .
+
+        LOOP AT gt_bdc_messages INTO gs_bdc_messages.
+          APPEND gs_bdc_messages TO gt_messages.
+        ENDLOOP.                         " LOOP AT GT_BDC_MESSAGES INTO ..
+
+      ELSE.
+        APPEND gs_payment_data TO gt_error_data.
+      ENDIF.
+
+    ENDIF.                             " IF SY-TABIX NE 1
+
+  ENDLOOP.                             " LOOP AT GT_PAYMENT_DATA INTO ..
+
+  DESCRIBE TABLE gt_error_data LINES lv_error_lines.
+
+  IF lv_error_lines GT 0.
+
+    gv_status = text-fal.
+* saving failed records to app server.
+    PERFORM save_erecords_appserver.
+    MESSAGE s035.
+
+  ELSE.
+    gv_status = text-suc.
+    MESSAGE s034.
+  ENDIF.                               " IF LV_ERROR_LINES GE 0
+
+ENDFORM.                               " FORMAT_DATA
+
+*----------------------------------------------------------------------*
+*  Form  REMOVE_DOUBLE_QUOTATIONS                                      *
+*----------------------------------------------------------------------*
+*  This subroutine is for removing the double quotations marks.        *
+*----------------------------------------------------------------------*
+*  <-- cv_string  -  data filed                                        *
+*----------------------------------------------------------------------*
+FORM remove_double_quotations  CHANGING cv_string TYPE any.
+  REPLACE ALL OCCURRENCES OF '"'
+                          IN cv_string
+                        WITH ''.
+ENDFORM.                               " REMOVE_DOUBLE_QUOTATIONS
+
+*----------------------------------------------------------------------*
+*  Form  DATE_FORMAT_USERSPEC                                          *
+*----------------------------------------------------------------------*
+*  This Subroutine is for changing the date format into user specific  *
+*----------------------------------------------------------------------*
+*  <-- cv_date  -  Date                                                *
+*----------------------------------------------------------------------*
+FORM date_format_userspec  CHANGING cv_cdate TYPE char10.
+
+  DATA: lv_i TYPE i VALUE 1,
+        lv_c TYPE c,
+        lv_off TYPE i VALUE 0,
+        lv_set TYPE i,
+        lv_nex TYPE i,
+        lv_day(2) TYPE n,
+        lv_month(2) TYPE n,
+        lv_year(4) TYPE n,
+        lv_idate TYPE sy-datum.
+
+  DO.
+    lv_c = cv_cdate+lv_nex(1).
+    IF lv_c EQ '/'.
+      IF lv_month IS INITIAL.
+        lv_month = cv_cdate+0(lv_set).
+        lv_off = lv_i.
+        CLEAR lv_set.
+      ELSEIF lv_day IS INITIAL.
+        lv_day = cv_cdate+lv_off(lv_set).
+        lv_year = cv_cdate+lv_i(2).
+        lv_year = lv_year + 2000.
+        EXIT.
+      ENDIF.
+    ELSE.
+      lv_set = lv_set + 1.
+    ENDIF.
+    lv_i = lv_i + 1.
+    lv_nex = lv_nex + 1.
+  ENDDO.
+
+  CONCATENATE lv_year
+              lv_month
+              lv_day
+         INTO lv_idate.
+
+  cv_cdate = lv_idate.
+
+ENDFORM.                               " DATE_FORMAT_USERSPEC
+
+*----------------------------------------------------------------------*
+*  Form  EXTRACT_STARTUP                                               *
+*----------------------------------------------------------------------*
+*  This subroutine is for getting the time stamp                       *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM extract_startup .
+  GET TIME STAMP FIELD gv_timestamp.
+  CONVERT TIME STAMP gv_timestamp TIME ZONE sy-zonlo
+                INTO DATE gv_ts_date TIME gv_ts_time.
+  gv_appser_log = text-alf.
+  gv_er_filename = text-erf.
+  gv_lg_filename = text-ilf.
+ENDFORM.                               " EXTRACT_STARTUP
+
+*----------------------------------------------------------------------*
+*  Form  CREATE_APPSERVER_LOG                                          *
+*----------------------------------------------------------------------*
+*  This subroutine is for creating appserver log file                  *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the            *
+*  subroutine.                                                         *
+*----------------------------------------------------------------------*
+FORM create_appserver_log.
+
+* Local work variables..................................................
+  DATA: lv_tab_string TYPE string.     " process details number
+
+
+  OPEN DATASET gv_appser_log FOR APPENDING IN TEXT MODE
+                                ENCODING DEFAULT.
+
+  IF sy-subrc NE 0.
+* filling the process details for extract log
+    PERFORM fill_process_details USING text-una.
+    gv_status = text-fal.
+
+* LOG file on Application Server.
+    PERFORM create_appserver_log.
+    MESSAGE e024.
+  ENDIF.                               " IF SY-SUBRC NE 0.
+
+  TRANSFER text-l01 TO gv_appser_log.
+  TRANSFER text-l21 TO gv_appser_log.
+  TRANSFER text-l01 TO gv_appser_log.
+  TRANSFER text-l03 TO gv_appser_log.
+  TRANSFER text-l04 TO gv_appser_log.
+
+* line formating in server extract log file
+  PERFORM dynamic_concat_*_appser USING text-l22
+                                        gv_current_date.
+
+* line formating in server extract log file
+  PERFORM dynamic_concat_*_appser USING text-l23
+                                        gv_current_time.
+* line formating in server extract log file
+  PERFORM dynamic_concat_*_appser USING text-l24
+                                        sy-uname.
+* line formating in server extract log file
+  PERFORM dynamic_concat_*_appser USING text-l09
+                                        sy-mandt.
+
+  TRANSFER text-l01 TO gv_appser_log.
+  TRANSFER text-l04 TO gv_appser_log.
+* line formating in server extract log file
+  PERFORM dynamic_concat_*_appser USING text-l19
+                                        gv_status.
+  TRANSFER text-l04 TO gv_appser_log.
+  TRANSFER text-l18 TO gv_appser_log.
+
+  LOOP AT gt_process_details INTO gs_process_details.
+
+    lv_tab_string = sy-tabix.
+
+    CONCATENATE c_star
+                lv_tab_string
+           INTO lv_tab_string SEPARATED BY space.
+* line formating in server extract log file
+    PERFORM dynamic_concat_*_appser USING lv_tab_string
+                                          gs_process_details-tab_line.
+
+  ENDLOOP.                             " LOOP AT GT_PROCESS_DETAILS ...
+
+  TRANSFER text-l04 TO gv_appser_log.
+  TRANSFER text-l20 TO gv_appser_log.
+  TRANSFER text-l01 TO gv_appser_log.
+
+  CLOSE DATASET gv_appser_log.
+ENDFORM.                               " CREATE_APPSERVER_LOG
+
+*----------------------------------------------------------------------*
+*  Form  DATE_FORMAT_MMDDYYYY                                          *
+*----------------------------------------------------------------------*
+*  this subroutine for converting the date yyyymmdd to mm/dd/yyyy      *
+*----------------------------------------------------------------------*
+*  <-- cv_yyyymmdd_date  -  text                                       *
+*----------------------------------------------------------------------*
+FORM date_format_mmddyyyy  CHANGING cv_yyyymmdd_date TYPE any.
+
+  CONCATENATE cv_yyyymmdd_date+4(2)
+              c_farw_slash
+              cv_yyyymmdd_date+6(2)
+              c_farw_slash
+              cv_yyyymmdd_date+0(4)
+         INTO cv_yyyymmdd_date.
+
+ENDFORM.                               " DATE_FORMAT_MMDDYYYY
+
+*----------------------------------------------------------------------*
+*  Form  DYNAMIC_CONCAT_*_APPSER                                       *
+*----------------------------------------------------------------------*
+*  This subroutine is for formatting the line in appserver extract log *
+*----------------------------------------------------------------------*
+*  --> iv_text    - text                                               *
+*  --> iv_string  - text                                               *
+*----------------------------------------------------------------------*
+FORM dynamic_concat_*_appser  USING iv_text TYPE any
+                                    iv_string TYPE any.
+
+* Local work variables..................................................
+  DATA:
+    lv_string TYPE string,               " String
+    lv_post_string TYPE string,          " String
+    lv_pre_string TYPE string,           " String
+    lv_line TYPE string,                 " String
+    lv_line_len TYPE i,                  " Line length
+    lv_pre_remain TYPE i,                " Pre string remain length
+    lv_text_length TYPE i,               " Text length
+    lv_string_length TYPE i,             " String length
+    lv_write_length TYPE i,              " String line length
+    lv_offset TYPE i,                    " Off set
+    lv_remain_len TYPE i.                " Remain string length
+
+  CONCATENATE iv_text
+              space
+         INTO lv_post_string.
+  lv_text_length = STRLEN( lv_post_string ).
+  lv_write_length = 71 - lv_text_length.
+  lv_write_length = lv_write_length - 2.
+  lv_string_length = STRLEN( iv_string ).
+  lv_remain_len = lv_string_length.
+  lv_offset = 0.
+  WHILE lv_remain_len GT 0.
+    IF lv_remain_len LT lv_write_length.
+      lv_write_length = lv_remain_len.
+    ENDIF.                             " IF LV_REMAIN_LEN LT LV_WR...
+    lv_string = iv_string+lv_offset(lv_write_length).
+    CONCATENATE lv_post_string
+                space
+                lv_string
+           INTO lv_line.
+    lv_line_len = STRLEN( lv_line ).
+    lv_pre_string = text-l04.
+    lv_pre_remain = 71 - lv_line_len.
+    lv_pre_string = lv_pre_string+lv_line_len(lv_pre_remain).
+    CONCATENATE lv_line
+                lv_pre_string
+           INTO lv_line.
+    TRANSFER lv_line TO gv_appser_log.
+    lv_post_string = text-l04.
+    lv_post_string = lv_post_string+0(lv_text_length).
+    lv_offset = lv_offset + lv_write_length.
+    lv_remain_len = lv_string_length - lv_offset.
+    CLEAR lv_line.
+  ENDWHILE.                            " WHILE LV_REMAIN_LEN GT 0.
+ENDFORM.                               " DYNAMIC_CONCAT_*_APPSER
+
+*----------------------------------------------------------------------*
+*  Form  DYNAMIC_CONCAT_*_LOG                                          *
+*----------------------------------------------------------------------*
+*  This subroutine is for formatting the line in appserver extract log *
+*----------------------------------------------------------------------*
+*  --> iv_text    - text                                               *
+*  --> iv_string  - text                                               *
+*----------------------------------------------------------------------*
+FORM dynamic_concat_*_log  USING iv_text TYPE any
+                                 iv_string TYPE any.
+
+* Local work variables..................................................
+  DATA:
+    lv_string TYPE string,               " String
+    lv_post_string TYPE string,          " String
+    lv_pre_string TYPE string,           " String
+    lv_line TYPE string,                 " String
+    lv_line_len TYPE i,                  " Line length
+    lv_pre_remain TYPE i,                " Pre string remain length
+    lv_text_length TYPE i,               " Text length
+    lv_string_length TYPE i,             " String length
+    lv_write_length TYPE i,              " String line length
+    lv_offset TYPE i,                    " Off set
+    lv_remain_len TYPE i.                " Remain string length
+
+  CONCATENATE iv_text
+              space
+         INTO lv_post_string.
+  lv_text_length = STRLEN( lv_post_string ).
+  lv_write_length = 71 - lv_text_length.
+  lv_write_length = lv_write_length - 2.
+  lv_string_length = STRLEN( iv_string ).
+  lv_remain_len = lv_string_length.
+  lv_offset = 0.
+  WHILE lv_remain_len GT 0.
+    IF lv_remain_len LT lv_write_length.
+      lv_write_length = lv_remain_len.
+    ENDIF.                             " IF LV_REMAIN_LEN LT LV_WR...
+    lv_string = iv_string+lv_offset(lv_write_length).
+    CONCATENATE lv_post_string
+                space
+                lv_string
+           INTO lv_line.
+    lv_line_len = STRLEN( lv_line ).
+    lv_pre_string = text-l04.
+    lv_pre_remain = 71 - lv_line_len.
+    lv_pre_string = lv_pre_string+lv_line_len(lv_pre_remain).
+    CONCATENATE lv_line
+                lv_pre_string
+           INTO lv_line.
+    TRANSFER lv_line TO gv_lg_fullpath.
+    lv_post_string = text-l04.
+    lv_post_string = lv_post_string+0(lv_text_length).
+    lv_offset = lv_offset + lv_write_length.
+    lv_remain_len = lv_string_length - lv_offset.
+    CLEAR lv_line.
+  ENDWHILE.                            " WHILE LV_REMAIN_LEN GT 0.
+ENDFORM.                               " DYNAMIC_CONCAT_*_LOG
+
+*----------------------------------------------------------------------*
+*  Form  FILL_PROCESS_DETAILS                                          *
+*----------------------------------------------------------------------*
+*  This subroutine is for filling the process details tab              *
+*----------------------------------------------------------------------*
+*  --> iv_text  -  text row for process details table                  *
+*----------------------------------------------------------------------*
+FORM fill_process_details  USING iv_text TYPE any.
+
+  APPEND iv_text TO gt_process_details.
+
+ENDFORM.                               " FILL_PROCESS_DETAILS
+
+*----------------------------------------------------------------------*
+*  Form  OPEN_SESSION                                                  *
+*----------------------------------------------------------------------*
+*  This subroutine is to open bdc session for failed transanctions     *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM open_session .
+
+* Local work variables..................................................
+  DATA: lv_name TYPE char12,           " Session name
+        lv_string TYPE string.         " String
+
+  CONCATENATE gv_ts_date+2(6)
+              gv_ts_time
+         INTO lv_name.
+
+  CALL FUNCTION 'BDC_OPEN_GROUP'
+    EXPORTING
+      client              = sy-mandt
+      group               = lv_name
+      user                = sy-uname
+      keep                = 'X'
+    EXCEPTIONS
+      client_invalid      = 1
+      destination_invalid = 2
+      group_invalid       = 3
+      group_is_locked     = 4
+      holddate_invalid    = 5
+      internal_error      = 6
+      queue_error         = 7
+      running             = 8
+      system_lock_error   = 9
+      user_invalid        = 10
+      OTHERS              = 11.
+
+  IF sy-subrc EQ 0.
+* filling the process details for extract log
+    PERFORM fill_process_details USING text-eop.
+
+    MESSAGE s015 WITH lv_name.
+    lv_string = text-sgn.
+    REPLACE ALL OCCURRENCES OF c_p1
+                            IN lv_string
+                          WITH lv_name.
+* filling the process details for extract log
+    PERFORM fill_process_details USING lv_string.
+
+    gv_status = lv_string.
+  ENDIF.                               " IF SY-SUBRC EQ 0.
+
+ENDFORM.                               " OPEN_SESSION
+
+*----------------------------------------------------------------------*
+*  Form  SAVE_ERECORDS_APPSERVER                                       *
+*----------------------------------------------------------------------*
+*  This subroutine is to save failed records to application server     *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM save_erecords_appserver .
+
+* adding header to error records file
+  PERFORM add_header.
+
+* converting failed transactions data to CSV format.
+  PERFORM convert_data_csv.
+
+* creating CSV flat files on app server
+  PERFORM create_csv_flat_file.
+
+ENDFORM.                               " SAVE_ERECORDS_APPSERVER
+
+*----------------------------------------------------------------------*
+*  Form  FILTER_ERECORDS                                               *
+*----------------------------------------------------------------------*
+*  This subroutine is to filter the failed records from total records  *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM filter_erecords .
+
+  DATA lv_lifnr TYPE typ_payment_data-lifnr.
+
+  CLEAR gs_success_bdc.
+
+  LOOP AT gt_success_bdc INTO gs_success_bdc.
+
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+      EXPORTING
+        input  = gs_success_bdc-lifnr
+      IMPORTING
+        output = lv_lifnr.
+
+    DELETE gt_payment_data WHERE lifnr = lv_lifnr
+                             AND hbank = gs_success_bdc-hbank.
+
+    IF sy-subrc EQ 0.
+
+      CONCATENATE c_double_quotation
+                  lv_lifnr
+                  c_double_quotation
+             INTO lv_lifnr.
+
+      CONCATENATE c_double_quotation
+                  gs_success_bdc-hbank
+                  c_double_quotation
+             INTO gs_success_bdc-hbank.
+
+      DELETE gt_payment_data WHERE lifnr = lv_lifnr
+                               AND hbank = gs_success_bdc-hbank.
+
+    ENDIF.
+
+  ENDLOOP.
+
+ENDFORM.                               " FILTER_ERECORDS
+
+*----------------------------------------------------------------------*
+*  Form  CONVERT_DATA_CSV                                              *
+*----------------------------------------------------------------------*
+*  This Subroutine is for converting internal table data to CSV format *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM convert_data_csv .
+
+  CALL FUNCTION 'SAP_CONVERT_TO_TEX_FORMAT'
+    EXPORTING
+      i_field_seperator          = ','
+*     I_LINE_HEADER              =
+*     I_FILENAME                 =
+*     I_APPL_KEEP                = ' '
+    TABLES
+*      i_tab_sap_data             = gt_payment_data
+      i_tab_sap_data             = gt_error_data
+    CHANGING
+      i_tab_converted_data       = gt_erecords_csv.
+
+ENDFORM.                               " CONVERT_DATA_CSV
+
+*----------------------------------------------------------------------*
+*  Form  CREATE_INBOUND_LOG                                            *
+*----------------------------------------------------------------------*
+*  Subroutine for creating CSV flat files on appserver                 *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM create_inbound_log.
+
+  CONCATENATE gv_lg_filename
+              gv_ts_date
+              c_underscore
+              gv_ts_time
+              c_dot
+              c_rtf_extension
+         INTO gv_lg_filename.
+
+* creating the log file to application server
+  PERFORM create_log_file.
+
+ENDFORM.                               " CREATE_INBOUND_LOG
+
+*----------------------------------------------------------------------*
+*  Form  CREATE_LOG_FILE                                               *
+*----------------------------------------------------------------------*
+*  This Subroutine is for creating the file to application server      *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM create_log_file .
+
+* local work variables..................................................
+  DATA:
+    lv_length TYPE i,                  " Length
+    lv_char TYPE char1,                " Character
+    lv_slash TYPE char1,               " Slash type in path
+    lv_total_records  TYPE i,          " Total records
+    lv_total_erecords  TYPE i,         " Total error records
+    lv_total_srecords  TYPE i,         " Total success records
+    lv_string_totrec TYPE string,      " Total records in string
+    lv_tab_string TYPE string.         " process details number
+
+  IF p_lfpath IS NOT INITIAL.
+    lv_length = STRLEN( p_lfpath ).
+    lv_length = lv_length - 1.
+    lv_char = p_lfpath+lv_length(1).
+
+    IF p_lfpath CA c_farw_slash.
+      lv_slash = c_farw_slash.
+    ELSE.
+      lv_slash = c_back_slash.
+    ENDIF.                             " IF P_EFPATH CA C_FARW_SLASH.
+
+    IF lv_char EQ lv_slash.
+      CONCATENATE p_lfpath
+                  gv_lg_filename
+             INTO gv_lg_fullpath.
+    ELSE.
+      CONCATENATE p_lfpath
+                  c_back_slash
+                  gv_lg_filename
+             INTO gv_lg_fullpath.
+    ENDIF.                             " IF LV_CHAR EQ LV_SLASH.
+  ELSE.
+    gv_lg_fullpath = gv_lg_filename.
+  ENDIF.                               " IF P_EFPATH IS NOT INITIAL.
+
+  OPEN DATASET gv_lg_fullpath FOR OUTPUT IN TEXT MODE
+                                ENCODING DEFAULT.
+  IF sy-subrc EQ 0.
+
+    TRANSFER text-l01 TO gv_lg_fullpath.
+    TRANSFER text-l21 TO gv_lg_fullpath.
+    TRANSFER text-l01 TO gv_lg_fullpath.
+    TRANSFER text-l03 TO gv_lg_fullpath.
+    TRANSFER text-l04 TO gv_lg_fullpath.
+
+    gv_current_date = gv_ts_date.
+
+* change date format YYYYMMDD into MM/DD/YYYY
+    PERFORM date_format_mmddyyyy CHANGING gv_current_date.
+
+* line formating in server extract log file
+    PERFORM dynamic_concat_*_log USING text-l22
+                                        gv_current_date.
+    CONCATENATE gv_ts_time+0(2)
+                c_colon
+                gv_ts_time+2(2)
+                c_colon
+                gv_ts_time+4(2)
+           INTO gv_current_time.
+
+* line formating in server extract log file
+    PERFORM dynamic_concat_*_log USING text-l23
+                                     gv_current_time.
+* line formating in server extract log file
+    PERFORM dynamic_concat_*_log USING text-l24
+                                     sy-uname.
+* line formating in server extract log file
+    PERFORM dynamic_concat_*_log USING text-l09
+                                     sy-mandt.
+
+    TRANSFER text-l04 TO gv_lg_fullpath.
+
+*    DESCRIBE TABLE gt_payment_bdcdata LINES lv_total_records.
+    DESCRIBE TABLE gt_payment_data LINES lv_total_records.
+    lv_total_records = lv_total_records - 1.
+    lv_string_totrec = lv_total_records.
+
+
+* line formating in extract log file
+    PERFORM dynamic_concat_*_log USING text-l16
+                                       lv_string_totrec.
+
+    DESCRIBE TABLE gt_error_data LINES lv_total_erecords.
+
+    lv_total_erecords = lv_total_erecords - 1.
+
+
+    lv_total_srecords = lv_total_records - lv_total_erecords.
+    lv_string_totrec = lv_total_srecords.
+
+* line formating in extract log file
+    PERFORM dynamic_concat_*_log USING text-l15
+                                       lv_string_totrec.
+
+    lv_string_totrec = lv_total_erecords.
+
+* line formating in extract log file
+    PERFORM dynamic_concat_*_log USING text-l14
+                                       lv_string_totrec.
+
+    CLEAR: lv_total_records,
+           lv_string_totrec.
+
+    DESCRIBE TABLE gt_vendor LINES lv_total_records.
+
+    lv_string_totrec = lv_total_records.
+
+* line formating in extract log file
+    PERFORM dynamic_concat_*_log USING text-l13
+                                       lv_string_totrec.
+
+    CLEAR lv_string_totrec.
+
+    IF gv_tot_over IS INITIAL.
+      lv_string_totrec = gv_tot_amt.
+
+      CONCATENATE lv_string_totrec
+                  space
+                  c_usd
+             INTO lv_string_totrec.
+    ELSE.
+      lv_string_totrec = gv_tot_over.
+    ENDIF.
+
+* line formating in extract log file
+    PERFORM dynamic_concat_*_log USING text-l12
+                                       lv_string_totrec.
+
+    CLEAR lv_string_totrec.
+
+    lv_string_totrec = gv_tot_dis.
+
+    CONCATENATE lv_string_totrec
+                space
+                c_usd
+           INTO lv_string_totrec.
+
+* line formating in extract log file
+    PERFORM dynamic_concat_*_log USING text-l11
+                                       lv_string_totrec.
+
+    TRANSFER text-l01 TO gv_lg_fullpath.
+    TRANSFER text-l04 TO gv_lg_fullpath.
+* line formating in server extract log file
+    PERFORM dynamic_concat_*_log USING text-l19
+                                     gv_status.
+    TRANSFER text-l04 TO gv_lg_fullpath.
+    TRANSFER text-l18 TO gv_lg_fullpath.
+
+    LOOP AT gt_process_details INTO gs_process_details.
+
+      lv_tab_string = sy-tabix.
+
+      CONCATENATE c_star
+                lv_tab_string
+           INTO lv_tab_string SEPARATED BY space.
+* line formating in server extract log file
+      PERFORM dynamic_concat_*_log USING lv_tab_string
+                                       gs_process_details-tab_line.
+
+    ENDLOOP.                             " LOOP AT GT_PROCESS_DETAILS ...
+
+    TRANSFER text-l04 TO gv_lg_fullpath.
+    TRANSFER text-l20 TO gv_lg_fullpath.
+    TRANSFER text-l01 TO gv_lg_fullpath.
+
+    CLOSE DATASET gv_lg_fullpath.
+  ENDIF.                               " IF SY-SUBRC EQ 0.
+
+ENDFORM.                               " CREATE_LOG_FILE
+
+*----------------------------------------------------------------------*
+*  Form  CREATE_CSV_FLAT_FILE                                          *
+*----------------------------------------------------------------------*
+*  Subroutine for creating CSV flat files on appserver                 *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM create_csv_flat_file.
+
+  CONCATENATE gv_er_filename
+              gv_ts_date
+              c_underscore
+              gv_ts_time
+              c_dot
+              c_csv_extension
+         INTO gv_er_filename.
+
+* creating the file to application server
+  PERFORM create_file_appserver.
+
+ENDFORM.                               " CREATE_CSV_FLAT_FILE
+
+*----------------------------------------------------------------------*
+*  Form  CREATE_FILE_APPSERVER                                         *
+*----------------------------------------------------------------------*
+*  This Subroutine is for creating the file to application server      *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM create_file_appserver .
+
+* local work variables..................................................
+  DATA:
+    lv_length TYPE i,                  " Length
+    lv_char TYPE char1,                " Character
+    lv_slash TYPE char1.               " Slash type in path
+
+  IF p_efpath IS NOT INITIAL.
+    lv_length = STRLEN( p_efpath ).
+    lv_length = lv_length - 1.
+    lv_char = p_efpath+lv_length(1).
+
+    IF p_efpath CA c_farw_slash.
+      lv_slash = c_farw_slash.
+    ELSE.
+      lv_slash = c_back_slash.
+    ENDIF.                             " IF P_EFPATH CA C_FARW_SLASH.
+
+    IF lv_char EQ lv_slash.
+      CONCATENATE p_efpath
+                  gv_er_filename
+             INTO gv_er_fullpath.
+    ELSE.
+      CONCATENATE p_efpath
+                  c_back_slash
+                  gv_er_filename
+             INTO gv_er_fullpath.
+    ENDIF.                             " IF LV_CHAR EQ LV_SLASH.
+  ELSE.
+    gv_er_fullpath = gv_er_filename.
+  ENDIF.                               " IF P_EFPATH IS NOT INITIAL.
+
+  OPEN DATASET gv_er_fullpath FOR OUTPUT IN TEXT MODE
+                                ENCODING DEFAULT.
+  IF sy-subrc EQ 0.
+
+    LOOP AT gt_erecords_csv INTO gs_erecords_csv.
+      TRANSFER gs_erecords_csv TO gv_er_fullpath.
+    ENDLOOP.                           " LOOP AT GT_ERECORDS INTO ...
+
+    CLOSE DATASET gv_er_fullpath.
+  ENDIF.                               " IF SY-SUBRC EQ 0.
+
+ENDFORM.                               " CREATE_FILE_APPSERVER
+
+*----------------------------------------------------------------------*
+*  Form  FETCH_CONFIG_DETAILS                                          *
+*----------------------------------------------------------------------*
+*  This subroutine is for fetching quickpay configuration details      *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM fetch_config_details .
+
+* Local work variables..................................................
+
+  DATA: lv_subrc TYPE sy-subrc.        " sy-subrc
+
+  REFRESH gt_config_file.
+
+  IF gv_config_file IS INITIAL.
+
+    CONCATENATE sy-mandt
+                c_configure
+                c_dot
+                c_csv_extension
+           INTO gv_config_file.
+  ENDIF.                               " IF GV_CONFIG_FILE IS INITIAL
+
+  OPEN DATASET gv_config_file FOR INPUT IN TEXT MODE ENCODING DEFAULT.
+
+  IF sy-subrc NE 0.
+* filling the process details for extract log
+    PERFORM fill_process_details USING text-uaa.
+    gv_status = text-fal.
+
+* LOG file on Application Server.
+    PERFORM create_appserver_log.
+    MESSAGE e030.
+  ENDIF.                               " IF SY-SUBRC NE 0
+
+  DO.
+    READ DATASET gv_config_file INTO gs_config_csv.
+    lv_subrc = sy-subrc.
+    IF lv_subrc NE 0.
+      EXIT.
+    ENDIF.                             " IF SY-SUBRC NE 0
+    SPLIT gs_config_csv AT c_comma
+                      INTO gs_config_file-mode
+                           gs_config_file-type.
+
+    APPEND gs_config_file TO gt_config_file.
+    CLEAR gs_config_file.
+  ENDDO.                               " IF SY-SUBRC NE 0 EXIT
+
+  CLEAR lv_subrc.
+
+  CLOSE DATASET gv_config_file.
+
+  IF gv_config_details IS INITIAL.
+    CONCATENATE sy-mandt
+                c_config_details
+                c_dot
+                c_csv_extension
+           INTO gv_config_details.
+  ENDIF.                               " IF GV_CONFIG_DETAILS IS INITIAL
+
+  OPEN DATASET gv_config_details FOR INPUT IN TEXT MODE
+                                     ENCODING DEFAULT.
+
+  IF sy-subrc NE 0.
+* filling the process details for extract log
+    PERFORM fill_process_details USING text-uaa.
+    gv_status = text-fal.
+
+* LOG file on Application Server.
+    PERFORM create_appserver_log.
+
+    MESSAGE e030.
+  ENDIF.                               " IF SY-SUBRC NE 0
+
+  DO.
+    READ DATASET gv_config_details INTO gs_config_csv.
+    lv_subrc = sy-subrc.
+    IF lv_subrc NE 0.
+      EXIT.
+    ENDIF.                             " IF SY-SUBRC NE 0
+    SPLIT gs_config_csv AT c_comma
+                      INTO gs_config_details-mode
+                           gs_config_details-type
+                           gs_config_details-value.
+
+    APPEND gs_config_details TO gt_config_details.
+    CLEAR gs_config_details.
+  ENDDO.                               " IF SY-SUBRC NE 0 EXIT
+
+  CLOSE DATASET gv_config_details.
+
+  READ TABLE gt_config_file INTO gs_config_file
+                          WITH KEY mode = c_inbound.
+  IF sy-subrc EQ 0.
+    IF gs_config_file-type EQ c_app_server.
+  gv_as = c_flag_on.
+      READ TABLE gt_config_details INTO gs_config_details
+                               WITH KEY mode = c_inbound
+                                        type = c_app_server.
+      gv_as_path = gs_config_details-value.
+    ELSE.
+      CALL 'C_SAPGPARAM' ID 'NAME'  FIELD 'DIR_HOME'
+                          ID 'VALUE' FIELD gv_ftp_app_path.
+    ENDIF.                             " IF GS_CONFIG_FILE-TYPE EQ ...
+
+    IF gs_config_file-type EQ c_desktop.
+      gv_desk = c_flag_on.
+    ENDIF.                             " IF GS_CONFIG_FILE-TYPE EQ ...
+
+    IF gs_config_file-type EQ c_ftp_on.
+      gv_ftp = c_flag_on.
+      READ TABLE gt_config_details INTO gs_config_details
+                               WITH KEY mode = c_inbound
+                                        type = c_ftp_host.
+      gv_host = gs_config_details-value.
+      READ TABLE gt_config_details INTO gs_config_details
+                             WITH KEY mode = c_inbound
+                                      type = c_ftp_uname.
+      gv_user = gs_config_details-value.
+      READ TABLE gt_config_details INTO gs_config_details
+                             WITH KEY mode = c_inbound
+                                      type = c_ftp_password.
+      gv_pass = gs_config_details-value.
+      READ TABLE gt_config_details INTO gs_config_details
+                             WITH KEY mode = c_inbound
+                                      type = c_ftp_dir.
+      gv_cmd_ftppath = gs_config_details-value.
+    ENDIF.                             " IF GS_CONFIG_FILE-TYPE CA ...
+  ENDIF.                               " IF SY-SUBRC EQ 0.
+
+ENDFORM.                               " FETCH_CONFIG_DETAILS
+
+*----------------------------------------------------------------------*
+*  Form  MODIFY_SCREEN                                                 *
+*----------------------------------------------------------------------*
+*  This subroutine is for modifying the selection screen based on quic-*
+*  kpay configuration inputs                                           *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM modify_screen .
+
+  gv_note = text-ffn.
+  IF gv_desk IS INITIAL.
+    LOOP AT SCREEN.
+      IF screen-name EQ '%_P_DFILE_%_APP_%-TEXT'.
+        screen-active = 0.
+        MODIFY SCREEN.
+      ENDIF.                           " SCREEN-NAME EQ '%_P_DPATH_%_...
+      IF screen-name EQ 'P_DFILE'.
+        screen-active = 0.
+        MODIFY SCREEN.
+      ENDIF.                           " SCREEN-NAME EQ 'P_DPATH'
+      IF screen-name EQ 'GV_NOTE'.
+        screen-active = 0.
+        MODIFY SCREEN.
+      ENDIF.                           " SCREEN-NAME EQ 'GV_NOTE'
+    ENDLOOP.                           " LOOP AT SCREEN
+  ELSE.
+    LOOP AT SCREEN.
+      IF screen-name EQ '%_P_FNAME_%_APP_%-TEXT'.
+        screen-active = 0.
+        MODIFY SCREEN.
+      ENDIF.                           " SCREEN-NAME EQ '%_P_DPATH_%_...
+      IF screen-name EQ 'P_FNAME'.
+        screen-active = 0.
+        MODIFY SCREEN.
+      ENDIF.                           " SCREEN-NAME EQ 'P_DPATH'
+    ENDLOOP.                           " LOOP AT SCREEN
+  ENDIF.                               " IF GV_DESK IS INITIAL
+
+ENDFORM.                               " MODIFY_SCREEN
+
+*----------------------------------------------------------------------*
+*  Form  BROWSE_FOR_FILE                                               *
+*----------------------------------------------------------------------*
+*  This subroutine is to browse the file                               *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM browse_for_file .
+
+  CALL FUNCTION 'F4_FILENAME'
+*   EXPORTING
+*     PROGRAM_NAME        = SYST-CPROG
+*     DYNPRO_NUMBER       = SYST-DYNNR
+*     FIELD_NAME          = ' '
+   IMPORTING
+     file_name           = p_dfile.
+
+ENDFORM.                               " BROWSE_FOR_FILE
+
+*----------------------------------------------------------------------*
+*  Form  CHECK_PATH_APPSERVER                                          *
+*----------------------------------------------------------------------*
+*  This subroutine is for validating error file application server path*
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM check_path_appserver USING iv_apppath TYPE string.
+
+* local work variables .................................................
+
+  DATA:
+    lv_filepath TYPE ocs_file-name.    " File path
+
+  DATA:
+    lv_dir_files TYPE STANDARD TABLE
+                        OF ocs_file INITIAL SIZE 0.
+
+
+  lv_filepath = iv_apppath.
+
+  CALL FUNCTION 'OCS_GET_FILE_INFO'
+    EXPORTING
+      dir_name                        = lv_filepath
+*       FILE_NAME                       = '*'
+    TABLES
+      dir_list                        = lv_dir_files
+    EXCEPTIONS
+      no_authority                    = 1
+      activity_unknown                = 2
+      not_a_directory                 = 3
+      no_media_in_drive               = 4
+      too_many_errors                 = 5
+      too_many_files                  = 6
+      bracket_error_in_filename       = 7
+      no_such_parameter               = 8
+      OTHERS                          = 9.
+  IF sy-subrc EQ 3.
+    gv_stop_flag = c_flag_on.
+    MESSAGE s016 WITH lv_filepath.
+    CALL SELECTION-SCREEN 1000.
+  ELSE.
+    gv_stop_flag = c_flag_off.
+  ENDIF.                             " IF SY-SUBRC EQ 3.
+
+ENDFORM.                               " CHECK_PATH_APPSERVER
+*----------------------------------------------------------------------*
+*  Form  CHECK_INPUT_PAI                                               *
+*----------------------------------------------------------------------*
+*  This subroutine is to check the input values for PAI                *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM check_input_pai .
+
+  IF gv_stop_flag EQ c_flag_on.
+    LEAVE PROGRAM.
+  ENDIF.
+
+ENDFORM.                               " CHECK_INPUT_PAI
+
+*----------------------------------------------------------------------*
+*  Form  FETCH_DATA_FROM_SOURCE                                        *
+*----------------------------------------------------------------------*
+*  This subroutine is to fetch the data from source                    *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM fetch_data_from_source .
+
+  IF gv_desk EQ c_flag_on.
+    PERFORM check_file_path.
+    PERFORM fetch_from_frontend.
+  ENDIF.                               " IF GV_DESK EQ C_FLAG_ON.
+
+  IF gv_as EQ c_flag_on.
+* fetching the inbound file from app server to a internal table
+    PERFORM fetch_data_from_server.
+  ENDIF.                               " IF GV_AS EQ C_FLAG_ON.
+
+  IF gv_ftp EQ c_flag_on.
+
+* open the ftp connection
+    PERFORM ftp_connection_open.
+
+* fetching inbound csv file to app server from ftp location
+    PERFORM fetch_file_from_ftp.
+
+* close the ftp connection
+    PERFORM ftp_connection_close.
+
+* fetching the inbound file from app server to a internal table
+    PERFORM fetch_data_from_server.
+
+  ENDIF.                               " IF GV_FTP EQ C_FLAG_ON.
+
+ENDFORM.                               " FETCH_DATA_FROM_SOURCE
+
+*----------------------------------------------------------------------*
+*  Form  FETCH_FROM_FRONTEND                                           *
+*----------------------------------------------------------------------*
+*  This subroutine is to fetch the data from frontend                  *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM fetch_from_frontend .
+
+* Local work variables..................................................
+  DATA:
+    lv_file TYPE string,               " File path
+    lv_string TYPE string,             " Text string
+    lv_sreccount TYPE char10,          " Number of records
+    lv_reccount TYPE i.                " Number of records
+
+  lv_file = p_dfile.
+
+  CALL FUNCTION 'GUI_UPLOAD'
+    EXPORTING
+      filename = lv_file
+    TABLES
+      data_tab = gt_file_data.
+
+  LOOP AT gt_file_data INTO gs_file_data.
+
+    SPLIT gs_file_data AT c_comma
+                     INTO gs_payment_data-pbid
+                          gs_payment_data-pbnam
+                          gs_payment_data-xblnr
+                          gs_payment_data-lifnr
+                          gs_payment_data-bsnam
+                          gs_payment_data-belnr
+                          gs_payment_data-invid
+                          gs_payment_data-bktxt
+                          gs_payment_data-wrbtr
+                          gs_payment_data-basid
+                          gs_payment_data-sgtxt
+                          gs_payment_data-disc
+                          gs_payment_data-inco
+                          gs_payment_data-oamt
+                          gs_payment_data-bldat
+                          gs_payment_data-pterm
+                          gs_payment_data-waers
+                          gs_payment_data-payamt
+                          gs_payment_data-valut
+                          gs_payment_data-doctyp
+                          gs_payment_data-bmtid
+                          gs_payment_data-btde
+                          gs_payment_data-sgrp
+                          gs_payment_data-zuonr.
+    IF sy-subrc EQ 0.
+      APPEND gs_payment_data TO gt_payment_data.
+      CLEAR gs_payment_data.
+    ELSE.
+* filling the process details for extract log
+      PERFORM fill_process_details USING text-afi.
+
+      gv_status = text-fal.
+* LOG file on Application Server.
+      PERFORM create_appserver_log.
+      MESSAGE e029.
+    ENDIF.                             " IF SY-SUBRC EQ 0.
+  ENDLOOP.                             " LOOP AT GT_FILE_DATA INTO ...
+
+  DESCRIBE TABLE gt_payment_data LINES lv_reccount.
+
+  lv_reccount = lv_reccount - 1.
+
+  MESSAGE s014 WITH lv_reccount p_fname.
+
+  lv_string = text-nrf.
+
+  lv_sreccount = lv_reccount.
+
+  CONDENSE lv_sreccount NO-GAPS.
+  REPLACE ALL OCCURRENCES OF c_p1
+                          IN lv_string
+                        WITH lv_sreccount.
+
+  REPLACE ALL OCCURRENCES OF c_p2
+                          IN lv_string
+                        WITH p_fname.
+
+* filling the process details for extract log
+  PERFORM fill_process_details USING lv_string.
+ENDFORM.                               " FETCH_FROM_FRONTEND
+
+*----------------------------------------------------------------------*
+*  Form  CHECK_FILE_PATH                                               *
+*----------------------------------------------------------------------*
+*  This subroutine is to check the input file path                     *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM check_file_path .
+
+* Local work variables..................................................
+  DATA:
+    lv_string TYPE string,             " Test string
+    lv_flag TYPE char1 VALUE c_flag_off.
+  " Flag
+
+  CALL FUNCTION 'DX_FILE_EXISTENCE_CHECK'
+    EXPORTING
+      filename             = p_dfile
+      pc                   = c_flag_on
+*   SERVER              =
+    IMPORTING
+      file_exists          = lv_flag
+    EXCEPTIONS
+     rfc_error            = 1
+     frontend_error       = 2
+     no_authority         = 3
+     OTHERS               = 4.
+
+  IF NOT ( sy-subrc = 0 AND lv_flag = c_flag_on ).
+    lv_string = text-ifn.
+    REPLACE ALL OCCURRENCES OF c_p1
+                            IN lv_string
+                          WITH p_dfile.
+* filling the process details for extract log
+    PERFORM fill_process_details USING lv_string.
+
+    gv_status = text-fal.
+* LOG file on Application Server.
+    PERFORM create_appserver_log.
+
+    MESSAGE e020 WITH p_dfile.
+  ELSE.
+    lv_string = text-ifp.
+    REPLACE ALL OCCURRENCES OF c_p1
+                            IN lv_string
+                          WITH p_dfile.
+* filling the process details for extract log
+    PERFORM fill_process_details USING lv_string.
+    CLEAR lv_string.
+  ENDIF.                               " IF NOT SY-SUBRC = 0 AND ...
+
+ENDFORM.                               " CHECK_FILE_PATH
+
+*----------------------------------------------------------------------*
+*  Form  FETCH_ERROR_FILE_PATH                                         *
+*----------------------------------------------------------------------*
+*  This subroutine is to fetch the app server error file path          *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM fetch_error_file_path .
+      CALL 'C_SAPGPARAM' ID 'NAME'  FIELD 'DIR_HOME'
+                         ID 'VALUE' FIELD gv_as_epath.
+      p_efpath = gv_as_epath.
+      p_lfpath = gv_as_epath.
+ENDFORM.                               " FETCH_ERROR_FILE_PATH
+
+*----------------------------------------------------------------------*
+*  Form  FILL_BSEG                                                     *
+*----------------------------------------------------------------------*
+*  This subroutine is to fill BSEG structure table                     *
+*----------------------------------------------------------------------*
+*  <-- iv_bukrs  -  company code                                       *
+*  <-- iv_belnr  -  document number                                    *
+*  <-- iv_gjahr  -  posing period                                      *
+*  <-- ct_bseg   -  BSEG structure table                               *
+*----------------------------------------------------------------------*
+FORM fill_bseg USING iv_bukrs TYPE bukrs
+                     iv_belnr TYPE bkpf-belnr
+                     iv_gjahr TYPE gjahr
+            CHANGING ct_bseg TYPE STANDARD TABLE.
+
+  SELECT *
+  FROM bseg
+  INTO TABLE ct_bseg
+ WHERE bukrs = iv_bukrs
+   AND belnr = iv_belnr
+   AND gjahr = iv_gjahr.
+
+ENDFORM.                               " FILL_BSEG
+*----------------------------------------------------------------------*
+*  Form  FILL_BSET                                                     *
+*----------------------------------------------------------------------*
+*  This subroutine is to fill BSET structure table                     *
+*----------------------------------------------------------------------*
+*  <-- iv_bukrs  -  company code                                       *
+*  <-- iv_belnr  -  document number                                    *
+*  <-- iv_gjahr  -  posing period                                      *
+*  <-- ct_bset   -  BSET structure table                               *
+*----------------------------------------------------------------------*
+FORM fill_bset USING iv_bukrs TYPE bukrs
+                     iv_belnr TYPE bkpf-belnr
+                     iv_gjahr TYPE gjahr
+            CHANGING ct_bset TYPE STANDARD TABLE.
+
+  SELECT *
+  FROM bset
+  INTO TABLE ct_bset
+ WHERE bukrs = iv_bukrs
+   AND belnr = iv_belnr
+   AND gjahr = iv_gjahr.
+
+ENDFORM.                               " FILL_BSET
+*----------------------------------------------------------------------*
+*  Form  FILL_BKPF                                                     *
+*----------------------------------------------------------------------*
+*  This subroutine is to fill BKPF structure table                     *
+*----------------------------------------------------------------------*
+*  <-- iv_bukrs  -  company code                                       *
+*  <-- iv_belnr  -  document number                                    *
+*  <-- iv_gjahr  -  posing period                                      *
+*  <-- ct_bkpf   -  BKPF structure table                               *
+*----------------------------------------------------------------------*
+FORM fill_bkpf USING iv_bukrs TYPE bukrs
+                     iv_belnr TYPE bkpf-belnr
+                     iv_gjahr TYPE gjahr
+            CHANGING ct_bkpf TYPE STANDARD TABLE.
+
+  SELECT *
+   FROM bkpf
+   INTO TABLE ct_bkpf
+  WHERE bukrs = iv_bukrs
+    AND belnr = iv_belnr
+    AND gjahr = iv_gjahr.
+
+ENDFORM.                               " FILL_BKPF
+*----------------------------------------------------------------------*
+*  Form  ADD_HEADER                                                    *
+*----------------------------------------------------------------------*
+*  This subroutine is to add header line to error records table        *
+*----------------------------------------------------------------------*
+*  There are no interface parameters to be passed on to the subroutine.*
+*----------------------------------------------------------------------*
+FORM add_header .
+
+  READ TABLE gt_payment_data INTO gs_payment_data INDEX 1.
+
+  INSERT gs_payment_data INTO gt_error_data INDEX 1.
+
+ENDFORM.                               " ADD_HEADER

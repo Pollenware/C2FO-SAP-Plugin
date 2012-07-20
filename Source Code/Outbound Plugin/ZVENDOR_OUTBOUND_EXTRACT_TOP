@@ -1,0 +1,810 @@
+*----------------------------------------------------------------------*
+* Program Id:     ZVENDOR_OUTBOUND_EXTRACT_TOP                         *
+* Program Title:  Definations for the program ZVENDOR_OUTBOUND_EXTRACT *
+* Program Type:   Include                                              *
+* Author:         Avinash Ravipati, Advent Global Solutions            *
+* SAP Release:    ECC 6.0                                              *
+* CR No:                                                               *
+* Date:           12/04/2011                                           *
+* Description:    This program contains data declarations for the inte-*
+*                 rface program ZVENDOR_OUTBOUND_EXTRACT               *
+*----------------------------------------------------------------------*
+* CHANGE LOG                                                           *
+* CR Number       Date                                Author           *
+*----------------------------------------------------------------------*
+
+* Tables................................................................
+TABLES: lfa1,                          " Vendor Master (General Section)
+        bsik,                          " Accounting: Sec Index for Vend.
+        bkpf,                          " Accounting Document Header
+        lfb1,                          " Vendor Master (Company Code)
+        sscrfields.                    " Fields on selection screens
+
+* Type pools............................................................
+TYPE-POOLS:
+  truxs.                               " TR-FDU general type-pools
+
+* Types.................................................................
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the payment detail            *
+* records extracted from BSIK.                                         *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_vendor_payments,
+    lifnr TYPE bsik-lifnr,             " Vendor Number
+    xblnr TYPE bsik-xblnr,             " Invoice Reference Number
+    wrbtr TYPE bsik-wrbtr,             " Amount
+    bldat TYPE bsik-bldat,             " Document Date
+    belnr TYPE bsik-belnr,             " Document Number
+    zlsch TYPE bsik-zlsch,             " Payment Method
+    zterm TYPE bsik-zterm,             " Payment Terms
+    sgtxt TYPE bsik-sgtxt,             " Document Text
+    blart TYPE bsik-blart,             " Document Type
+    rebzg TYPE bsik-rebzg,             " Origi. Inv. Num. in Credit Memo
+    prctr TYPE bsik-prctr,             " Profit Centre
+    landl TYPE bsik-landl,             " Supplying Country
+    waers TYPE bsik-waers,             " Currency Key
+    zfbdt TYPE bsik-zfbdt,             " Baseline Dat for DueDate Cal.s
+    zbd1t TYPE bsik-zbd1t,             " Cash discount days 1
+    hbkid TYPE bsik-hbkid,             " Short Key for a House Bank
+    hktid TYPE bsik-hktid,             " ID for account details
+    bukrs type bsik-bukrs,
+    gjahr type bsik-gjahr,
+  END OF  typ_vendor_payments.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the formatted formatted       *
+* payments data.                                                       *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_payments_outbound,
+    lifnr TYPE char15,                 " Vendor Number
+    xblnr TYPE char25,                 " Invoice Reference Number
+    budat TYPE char18,                 " Due Date
+    bldat TYPE char18,                 " Document Date
+    wrbtr TYPE char16,                 " Amount
+    waers TYPE char14,                 " Currency Key
+    ltext TYPE char22,                 " Document Type
+    rebzg TYPE char25,                 " Origi. Inv. Num. in Credit Memo
+    trast TYPE char20,                 " Transaction Status
+    belnr TYPE char18,                 " Document Number
+    zlsch TYPE char32,                 " Payment Method
+    zterm TYPE char32,                 " Payment Terms
+    sgtxt(52) TYPE c,                  " Document Text
+    loevm TYPE char21,                 " Marked for Deletion
+    prctr TYPE char16,                 " Profit Centre
+    cf1 TYPE char16,                   " custom field 1
+    cf2 TYPE char16,                   " custom field 2
+    cf3 TYPE char16,                   " custom field 3
+    cf4 TYPE char16,                   " custom field 4
+    cf5 TYPE char16,                   " custom field 5
+    hbank TYPE char17,                 " House bank
+    gid TYPE char10,                   " Group ID
+  END OF  typ_payments_outbound.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the BKPF                      *
+*----------------------------------------------------------------------*
+TYPES:
+  BEGIN OF typ_bkpf,
+    bukrs TYPE bkpf-bukrs,             " Company Code
+    belnr TYPE bkpf-belnr,             " Accting Doc Number
+    gjahr TYPE bkpf-gjahr,             " Posting Period
+    ppnam TYPE bkpf-ppnam,             " Name of Parked this Document
+  END OF typ_bkpf.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the BSEG                      *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_bseg,
+    bukrs TYPE bseg-bukrs,             " Company Code
+    belnr TYPE bseg-belnr,             " Accting Doc Number
+    gjahr TYPE bseg-gjahr,             " Posting Period
+  END OF typ_bseg.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the vendor master and address *
+* details extracted from LFA1, ADRC and ADR6.                          *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_vendor_details,
+    lifnr TYPE lfa1-lifnr,             " Vendor Number
+    date_from TYPE adrc-date_from,     " Valid-from date
+    nation TYPE adrc-nation,           " International add version ID
+    name1 TYPE lfa1-name1,             " Vendor Name1
+    regio TYPE lfa1-regio,
+    adrnr TYPE lfa1-adrnr,             " Vendor Address Number
+    street TYPE adrc-street,           " Street
+    str_suppl1 TYPE adrc-str_suppl1,                        " Street2
+    str_suppl2 TYPE adrc-str_suppl2,                        " Street3
+    str_suppl3 TYPE adrc-str_suppl3,                        " Street4
+    location TYPE adrc-location,                            " Street5
+    ort01 TYPE lfa1-ort01,             " City
+    pstlz TYPE lfa1-pstlz,             " Postal Code
+    land1 TYPE lfa1-land1,             " Country Key
+    ktokk TYPE lfa1-ktokk,             " Vendor Group
+  END OF typ_vendor_details.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the formatted vendor master   *
+* details.                                                             *
+*----------------------------------------------------------------------*
+
+TYPES:
+ BEGIN OF typ_vendor_outbound,
+    lifnr TYPE char13,                 " Vendor Number
+    name1(37) TYPE c,                  " Vendor Name1
+    street TYPE char62,                " Street
+    str_suppl1(162) TYPE c,                                 " Street2
+    ort01(37) TYPE c,                  " City
+    bezei TYPE char22,                 " Region
+    pstlz TYPE char13,                 " Postal Code
+    land1 TYPE char14,                 " Country Key
+    cf1 TYPE char16,                   " Custom field 1
+    cf2 TYPE char16,                   " Custom field 2
+    cf3 TYPE char16,                   " Custom filed 3
+    cf4 TYPE char16,                   " Custom filed 4
+    cf5 TYPE char16,                   " Custom filed 5
+    ktokk TYPE char32,                 " Vendor Group Name
+    loevm TYPE char21,                 " Marked for Deletion
+    rper TYPE char17,                  " reserve_percent
+    ramt TYPE char16,                  " reserve_amount
+ END OF  typ_vendor_outbound.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the vendor contact person det-*
+* ails extracted from KNVK, ADRC and ADR6.                             *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_vendor_contacts,
+    lifnr TYPE lfa1-lifnr,             " Vendor Number
+    parnr TYPE knvk-parnr,             " Number of contact person
+    prsnr TYPE knvk-prsnr,             " Person number
+    date_from TYPE adrc-date_from,     " Valid-from date
+    nation TYPE adrc-nation,           " International add version ID
+    tel_number TYPE adrc-tel_number,   " Telephone
+    region  TYPE adrc-region,          " Region
+  END OF typ_vendor_contacts.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the formatted vendor contacts *
+* data.                                                                *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_contacts_outbound,
+    lifnr TYPE char15,                 " Vendor Number
+    name_first(42) TYPE c,             " First Name
+    name_last(42) TYPE c,              " Last Name
+    smtp_addr(243) TYPE c,             " Email ID
+    region TYPE char22,                " Region
+    tel_number TYPE char32,            " Telephone
+  END OF typ_contacts_outbound.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the vendors contcat persons   *
+* email details                                                        *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_email_details,
+    addrnumber TYPE adr6-addrnumber,   " Address number
+    persnumber TYPE adr6-persnumber,   " Person number
+    smtp_addr TYPE adr6-smtp_addr,     " E-Mail Address
+  END OF typ_email_details.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the vendors region details    *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_region_details,
+    spras TYPE t005u-spras,            " Language Key
+    land1 TYPE t005u-land1,            " Country Key
+    bland TYPE t005u-bland,            " Region
+    bezei TYPE t005u-bezei,            " Description
+  END OF typ_region_details.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the payment terms details     *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_pterms_details,
+    spras TYPE tvzbt-spras,            " Language Key
+    zterm TYPE tvzbt-zterm,            " Terms of Payment Key
+*    vtext TYPE tvzbt-vtext,            " Descr. of terms of payment
+    text1 TYPE t052u-text1,            " Descr. of terms of payment
+  END OF typ_pterms_details.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the doc type descriprion deta-*
+* -ils                                                                 *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_doctype_desc,
+    spras TYPE t003t-spras,            " Language Key
+    blart TYPE t003t-blart,            " Document Type
+    ltext TYPE t003t-ltext,            " Document Type Description
+  END OF typ_doctype_desc.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the vendor group descriprion  *
+* details
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_vendor_group_desc,
+    spras TYPE t077y-spras,            " Language Key
+    ktokk TYPE t077y-ktokk,            " Vendor account group
+    txt30 TYPE t077y-txt30,            " Account Group Name
+  END OF typ_vendor_group_desc.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the contact person's first and*
+* last name details                                                    *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_contacts_names,
+    persnumber TYPE adrp-persnumber,  " Person number
+    date_from TYPE adrp-date_from,    " Valid-from date
+    nation TYPE adrp-nation,          " International addr. version ID
+    name_first TYPE adrp-name_first,  " First name
+    name_last TYPE adrp-name_last,    " Last name
+  END OF typ_contacts_names.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the config setup data         *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_config_file,
+    mode TYPE char1,                   " Mode
+    type TYPE char3,                   " Source type
+  END OF typ_config_file.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the config setup details data *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_config_details,
+    mode TYPE char1,                   " Mode
+    type TYPE char2,                   " Source type
+    value TYPE char120,                " Value
+  END OF typ_config_details.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the last execution details    *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_last_exe,
+    mode TYPE char1,                   " Mode
+    value TYPE char8,                  " Value
+  END OF typ_last_exe.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the contact person's departme_*
+* -nt description details                                              *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_department_desc,
+    spras TYPE tsabt-spras,            " Language Key
+    abtnr TYPE tsabt-abtnr,            " Department number
+    vtext TYPE tsabt-vtext,            " Department Description
+  END OF typ_department_desc.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the contact person's function *
+* description details                                                  *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_function_desc,
+    spras TYPE tpfkt-spras,            " Language Key
+    pafkt TYPE tpfkt-pafkt,            " Contact person function
+    vtext TYPE tpfkt-vtext,            " function Description
+  END OF typ_function_desc.
+
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the log contents              *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_logtable_line,
+    tab_line(284) TYPE c,
+  END OF typ_logtable_line.
+
+* Constants.............................................................
+
+CONSTANTS:
+  c_underscore TYPE char1 VALUE '_',   " Underscore
+  c_farw_slash TYPE char1 VALUE '/',   " forward slash
+  c_back_slash TYPE char1 VALUE '\',   " backsalsh
+  c_colon TYPE char1 VALUE ':',        " colon
+  c_double_quotation TYPE char1 VALUE '"',
+                                       " double_quotation
+  c_dot TYPE char1 VALUE '.',          " Dot
+  c_star TYPE char1 VALUE '*',         " Star
+  c_comma TYPE char1 VALUE ',',        " comma
+  c_flag_on TYPE char1 VALUE 'X',      " Flag on
+  c_flag_off TYPE char1 VALUE space,   " Flag off
+  c_us_code TYPE char2 VALUE 'US',     " USA country code
+  c_csv_extension TYPE string VALUE 'CSV',
+                                       " CSV extension
+  c_rtf_extension TYPE string VALUE 'rtf',
+                                       " RTF extension
+  c_appser_log TYPE string VALUE 'VendorOutbound_AppServer_Log.rtf',
+                                       " VendorOutbound AppServer Log
+  c_configure TYPE char18 VALUE 'Quickpay_Configure',
+                                       " Config file
+  c_config_details TYPE char23 VALUE 'Quickpay_Config_Details',
+                                       " Config details file
+  c_input_file TYPE char25 VALUE 'outbound_last_inputs.csv',
+                                       " Outbound last execution inputs
+  c_outbound TYPE char1 VALUE 'O',     " Outbound mode
+  c_desktop TYPE char1 VALUE 'D',      " Desktop
+  c_app_server TYPE char1 VALUE 'A',   " App server
+  c_ftp TYPE char1 VALUE 'F',          " FTP
+  c_ftp_host TYPE char2 VALUE 'FH',    " FTP Host
+  c_ftp_uname TYPE char2 VALUE 'FI',   " FTP User name
+  c_ftp_password TYPE char2 VALUE 'FP'," FTP Password
+  c_ftp_dir TYPE char2 VALUE 'FD',     " FTP Dir
+  c_ftp_put TYPE char3 VALUE 'put',    " FTP command put
+  c_p1 TYPE char2 VALUE '&1',          " Place holder 1
+  c_p2 TYPE char2 VALUE '&2',          " Place holder 2
+  c_p3 TYPE char2 VALUE '&3',          " Place holder 3
+  c_ftp_p TYPE char6 VALUE 'ftp://',   " FTP path string
+  c_onli TYPE char4 VALUE 'ONLI',      " Function code for Execute
+  c_date TYPE char1 VALUE 'D',         " Date type
+  c_time TYPE char1 VALUE 'T',         " Time type
+  c_yes TYPE char3  VALUE 'Yes',       " Yes
+  c_ccode TYPE bukrs VALUE '1000',     " Company Code
+  c_usd TYPE char3 VALUE 'USD'.        " USD
+
+* Range tables..........................................................
+
+*----------------------------------------------------------------------*
+* Declaration of Range table to hold the vendor records                *
+*----------------------------------------------------------------------*
+
+DATA gr_vendor TYPE RANGE OF lfa1-lifnr.
+
+* Internal tables.......................................................
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the payment detail records     *
+* extracted from BSIK.                                                 *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_vendor_payments TYPE STANDARD TABLE
+                       OF typ_vendor_payments
+             INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the formatted payments data.   *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_payments_outbound TYPE STANDARD TABLE
+                         OF typ_payments_outbound
+               INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+*----------------------------------------------------------------------*
+DATA:
+  gt_bkpf TYPE STANDARD TABLE
+                           OF typ_bkpf
+                 INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+*----------------------------------------------------------------------*
+DATA:
+  gt_bseg TYPE STANDARD TABLE
+                           OF typ_bseg
+                 INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the vendor master and address  *
+* details extracted from LFA1, ADRC and ADR6.                          *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_vendor_details TYPE STANDARD TABLE
+                      OF typ_vendor_details WITH KEY lifnr
+            INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the formatted vendor master    *
+* details.                                                             *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_vendor_outbound TYPE STANDARD TABLE
+                       OF typ_vendor_outbound
+             INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the vendor contact person deta-*
+* ils extracted from KNVK, ADRC and ADR6.                              *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_vendor_contacts TYPE STANDARD TABLE
+                       OF typ_vendor_contacts
+             INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the formatted vendor contacts  *
+* data.                                                                *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_contacts_outbound TYPE STANDARD TABLE
+                         OF typ_contacts_outbound
+               INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the CSV formatted vendor master*
+* data.                                                                *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_vendor_csv TYPE truxs_t_text_data.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the CSV formatted payments data*
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_payments_csv TYPE truxs_t_text_data.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the CSV formatted vendor       *
+* contacts data.                                                       *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_contacts_csv TYPE truxs_t_text_data.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the CSV formatted data         *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_config_csv TYPE truxs_t_text_data.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the outbound extraction process*
+* details step by step for log file                                    *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_process_details TYPE STANDARD TABLE
+                       OF typ_logtable_line
+             INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the contents of the vendor ext-*
+* ract log file                                                        *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_extract_log TYPE STANDARD TABLE
+                   OF typ_logtable_line
+         INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the contents of vendor contact *
+* persons email details                                                *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_email_details TYPE STANDARD TABLE
+                     OF typ_email_details
+           INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the contents of vendor region  *
+* details                                                              *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_vendor_region_details TYPE SORTED TABLE
+                      OF typ_region_details
+         WITH UNIQUE KEY spras
+                         land1
+                         bland
+            INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the contents of vendor region  *
+* details                                                              *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_pterms_details TYPE SORTED TABLE
+                      OF typ_pterms_details
+         WITH UNIQUE KEY spras
+                         zterm
+            INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the contents of doc type descr-*
+* -iption details                                                      *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_doctype_desc TYPE SORTED TABLE
+                    OF typ_doctype_desc
+       WITH UNIQUE KEY spras
+                       blart
+          INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the contents of vendor group   *
+* description details                                                  *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_vendor_group_desc TYPE SORTED TABLE
+                         OF typ_vendor_group_desc
+            WITH UNIQUE KEY spras
+                            ktokk
+               INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the contact person's first and *
+* last name details                                                    *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_contacts_names TYPE SORTED TABLE
+                      OF typ_contacts_names
+         WITH UNIQUE KEY persnumber
+                         date_from
+                         nation
+            INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the contact person's department*
+* description details                                                  *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_department_desc TYPE SORTED TABLE
+                       OF typ_department_desc
+          WITH UNIQUE KEY spras
+                          abtnr
+             INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the contact person's function  *
+* description details                                                  *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_function_desc TYPE SORTED TABLE
+                     OF typ_function_desc
+        WITH UNIQUE KEY spras
+                        pafkt
+           INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the config setup data          *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_config_file TYPE STANDARD TABLE OF typ_config_file
+                           INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the config setup details       *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_config_details TYPE STANDARD TABLE OF typ_config_details
+                              INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the last execution details     *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_last_exe TYPE STANDARD TABLE OF typ_last_exe
+                        INITIAL SIZE 0.
+
+* Field strings.........................................................
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the payment detail records       *
+* extracted from BSIK.                                                 *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_vendor_payments TYPE typ_vendor_payments.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the formatted payments data.     *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_payments_outbound TYPE typ_payments_outbound.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the csv formatted payments data. *
+*----------------------------------------------------------------------*
+
+*DATA:
+*  gs_payments_csv LIKE LINE OF gt_payments_csv.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the vendor master and address    *
+* details extracted from LFA1, ADRC and ADR6.                          *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_vendor_details  TYPE typ_vendor_details.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the formatted vendor master      *
+* details.                                                             *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_vendor_outbound  TYPE typ_vendor_outbound.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the vendor contact person details*
+* extracted from KNVK, ADRC and ADR6.                                  *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_vendor_contacts  TYPE typ_vendor_contacts.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the formatted vendor contacts    *
+* data.                                                                *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_contacts_outbound  TYPE typ_contacts_outbound.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the outbound extraction process  *
+* details step by step for log file                                    *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_process_details  TYPE typ_logtable_line.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the CSV formatted data           *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_config_csv LIKE LINE OF gt_config_csv.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the contents of the vendor       *
+* contact persons email details                                        *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_email_details TYPE typ_email_details.
+
+*----------------------------------------------------------------------*
+* Declaration of Field string to hold the config setup data            *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_config_file TYPE typ_config_file.
+
+*----------------------------------------------------------------------*
+* Declaration of Field string to hold the config setup details         *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_config_details TYPE typ_config_details.
+
+*----------------------------------------------------------------------*
+* Declaration of Field string to hold the last execution details       *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_last_exe TYPE typ_last_exe.
+
+* Global work variables.................................................
+
+DATA:
+  gv_vp_filename TYPE string,          " Vendor Payment csv file name
+  gv_vm_filename TYPE string,          " Vendor Master csv file name
+  gv_vc_filename TYPE string,          " Vendor Contacts csv file name
+  gv_extract_logfile TYPE string,      " Vendor extract logFile
+  gv_vp_fullpath TYPE string,          " Vendor Payments file full path
+  gv_vm_fullpath TYPE string,          " Vendor Master file full path
+  gv_vc_fullpath TYPE string,          " Vendor Contacts file full path
+  gv_log_fullpath TYPE string,         " Log file full path
+  gv_timestamp TYPE timestamp,         " Time stamp
+  gv_ts_date  TYPE char8,              " Date in Time Stamp
+  gv_current_date TYPE char10,         " Date in dd/mm/yyyy format
+  gv_ts_time  TYPE char6,              " Time in Time Stamp
+  gv_current_time TYPE char8,          " Current time in HH:MM:SS
+  gv_download_flag TYPE char1          " Download Flag
+                  VALUE space,
+  gv_status TYPE string,               " Overall status
+  gv_cmd(160) TYPE c,                  " Command for FTP transfer
+  gv_user TYPE char30,                 " FTP user name
+  gv_host TYPE char64,                 " FTP host address
+  gv_rfc  TYPE rfcdes-rfcdest VALUE 'SAPFTPA',
+                                       " Logical Destination
+  gv_pass TYPE char30,                 " FTP user password
+  gv_compress TYPE c VALUE 'N',        " Compress
+  gv_config_file TYPE string,          " Config data file
+  gv_config_details TYPE string,       " Config details file
+  gv_as_path TYPE string,              " Application server path
+  gv_log_path TYPE string,             " Application server log path
+  gv_as_apath TYPE dirname_al11,
+  gv_ftp_dir TYPE string,              " FTP Directory
+  gv_as TYPE char1,                    " Config app server
+  gv_desk TYPE char1,                  " Config desktop
+  gv_ftp TYPE char1,                   " Config ftp
+  gv_hdl TYPE i,                       " FTP Handle
+  gv_last_date TYPE bkpf-cpudt,        " Day On Which Acct Doc Entered.
+  gv_last_time TYPE bkpf-cputm,        " Time of Entry
+  gv_to_date TYPE bkpf-cpudt,          " Day On Which Acct Doc Entered.
+  gv_to_time TYPE bkpf-cputm,          " Time of Entry
+  gv_input_file TYPE char28.           " Last exe details file
+
+
+* field symbols.........................................................
+FIELD-SYMBOLS:
+  <gs_vendor_details> TYPE typ_vendor_details,
+  <gs_vendor_region_details> TYPE typ_region_details,
+  <gs_pterms_details> TYPE typ_pterms_details,
+  <gs_doctype_desc> TYPE typ_doctype_desc,
+  <gs_vendor_group_desc> TYPE typ_vendor_group_desc,
+  <gs_contacts_names> TYPE typ_contacts_names.
+
+* Selection screen......................................................
+SELECTION-SCREEN BEGIN OF BLOCK g1 WITH FRAME TITLE text-til.
+SELECT-OPTIONS:
+  s_ccode FOR bsik-bukrs DEFAULT c_ccode,
+  s_dnum FOR bsik-belnr,
+  s_vendor FOR lfa1-lifnr,
+  s_date  FOR bsik-budat,
+  s_pterm FOR bsik-zterm,
+  s_pmetd FOR BSIK-ZLSCH.
+SELECTION-SCREEN END OF BLOCK g1.
+
+SELECTION-SCREEN BEGIN OF BLOCK g2 WITH FRAME TITLE text-pth.
+PARAMETERS:
+  p_dpath TYPE  string OBLIGATORY.
+SELECTION-SCREEN END OF BLOCK g2.
+
+*----------------------------------------------------------------------*
+*   Define  CONCATENATION                                              *
+*----------------------------------------------------------------------*
+*   Macro for concatenate the data with in the double quotation        *
+*   character.                                                         *
+*----------------------------------------------------------------------*
+
+DEFINE concatenation.
+  concatenate c_double_quotation
+              &1
+              c_double_quotation
+         into &2.
+END-OF-DEFINITION.                     " concatenation

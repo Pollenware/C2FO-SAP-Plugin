@@ -1,0 +1,652 @@
+*----------------------------------------------------------------------*                                                                     *
+* Program Id:     ZVENDOR_INBOUND_PAYMENT_F53T                         *
+* Program Title:  Definations for the program ZVENDOR_INBOUND_PAYMENT_ *
+*                 F53                                                  *
+* Program Type:   Include                                              *
+* Author:         Avinash Ravipati, Advent Global Solutions            *
+* SAP Release:    ECC 6.0                                              *
+* CR No:                                                               *
+* Date:           11/05/2011                                           *
+* Description:    This program contains data declarations for the inte-*
+*                 rface program ZVENDOR_INBOUND_PAYMENT                *
+*----------------------------------------------------------------------*
+* CHANGE LOG                                                           *
+* CR Number       Date                                Author           *
+*----------------------------------------------------------------------*
+
+* Type pools............................................................
+
+TYPE-POOLS:
+  truxs.                               " TR-FDU general type-pools
+
+* Types.................................................................
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the inbound payment records.  *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_payment_data,
+    pbid TYPE char21,                       " Pollenware Buyer ID
+    pbnam TYPE char23,                      " Pollenware Buyer Name
+    xblnr TYPE char24,                 " Pollenware Supplier ID
+    lifnr TYPE char19,                 " Buyer Supplier ID
+    bsnam TYPE char50,                      " Buyer Supplier Name
+    belnr TYPE char18,                 " Buyer Voucher ID
+    invid TYPE char25,                 " Supplier Transaction ID
+    bktxt TYPE char25,                 " Event ID
+    wrbtr TYPE char28,                 " Original Transaction Amount
+    basid TYPE char11,                      " Basket ID
+    sgtxt(52) TYPE c,                  " Basket Description
+    disc TYPE char21,                  " Discount Percentage
+    inco TYPE char8,                       " Income
+    oamt TYPE char29,                  " Awarded Transaction Amount
+    bldat TYPE char30,                 " Awarded Transaction Due Date
+    pterm TYPE char35,                      " Awarded Payment Terms Description
+    waers TYPE char10,                 " Currency
+    payamt TYPE char24,                " Net Transaction Amount
+    valut TYPE char28,                 " Buyer Transaction Due Date
+    doctyp TYPE char50,                 " Transaction Type
+    bmtid TYPE char31,                      " Buyer Matching Transaction ID
+    btde TYPE char31,                       " Buyer Transaction Description
+    sgrp  TYPE char16,                      " Supplier Group
+    zuonr TYPE char27,                 " Pollenware Transaction ID
+    hbank TYPE char13,                 " House bank
+  END OF typ_payment_data.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the formatted records of inbo-*
+* und payment records                                                  *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_payment_bdcdata,
+    lifnr TYPE lfb1-lifnr,             " Vendor Number
+    bukrs TYPE bkpf-bukrs,             " company code
+    xblnr TYPE bkpf-xblnr,             " Pollenware Vendor ID
+    budat TYPE char10,                 " posting date
+    waers TYPE bkpf-waers,             " Currency key
+    blart TYPE bkpf-blart,             " Transaction Type
+    valut TYPE char10,                 " Original Invoice Due Date
+    bktxt TYPE bkpf-bktxt,             " Event ID
+    wrbtr TYPE char16,                 " Amount
+    disc TYPE df05b-psskt,             " Discount
+    bldat TYPE char10,                 " Adjusted Payment Date
+    belnr TYPE bkpf-belnr,             " Voucher ID
+    invid TYPE rf05a-sel01,            " Invoice ID
+    sgtxt TYPE bseg-sgtxt,             " Item text
+    hbank TYPE char13,                 " House bank
+    zuonr TYPE bseg-zuonr,             " Assignment
+    doctyp TYPE char1,                 " Transaction Type
+  END OF typ_payment_bdcdata.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the header records of inbound *
+* payment records                                                      *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_payment_bdcheader,
+    lifnr TYPE lfb1-lifnr,             " Vendor Number
+    bukrs TYPE bkpf-bukrs,             " company code
+    xblnr TYPE bkpf-xblnr,             " Pollenware Vendor ID
+    budat TYPE char10,                 " posting date
+    waers TYPE bkpf-waers,             " Currency key
+    blart TYPE bkpf-blart,             " Transaction Type
+    valut TYPE char10,                 " Original Invoice Due Date
+    bktxt TYPE bkpf-bktxt,             " Event ID
+    wrbtr TYPE char16,                 " Amount
+    bldat TYPE char10,                 " Adjusted Payment Date
+    sgtxt TYPE bseg-sgtxt,             " Item text
+    zuonr TYPE bseg-zuonr,             " Assignment
+    hbank TYPE char13,                 " House bank
+    ukont TYPE t042i-ukont,            " G/L Account to be Posted
+  END OF typ_payment_bdcheader.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the posted records of inbound *
+* payment records                                                      *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_success_bdc,
+    lifnr TYPE lfb1-lifnr,             " Vendor Number
+    hbank TYPE char13,                 " House bank
+  END OF typ_success_bdc.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the config setup data         *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_config_file,
+    mode TYPE char1,                   " Mode
+    type TYPE char3,                   " Source type
+  END OF typ_config_file.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the config setup details data *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_config_details,
+    mode TYPE char1,                   " Mode
+    type TYPE char2,                   " Source type
+    value TYPE char120,                " Value
+  END OF typ_config_details.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the reference details in inbo-*
+* bound payment records                                                *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_reference,
+    lifnr TYPE lfb1-lifnr,             " Vendor Number
+    hbank TYPE char13,                 " House bank
+    doctyp TYPE char1,                 " Transaction Type
+    invid TYPE rf05a-sel01,            " Invoice ID
+    disc TYPE char16,                  " Discount
+  END OF typ_reference.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the unique references         *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_uniref,
+    invid TYPE rf05a-sel01,            " Invoice ID
+  END OF typ_uniref.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the unique references         *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_uniinv,
+    belnr TYPE bkpf-belnr,             " Voucher ID
+  END OF typ_uniinv.
+
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the discount amounts          *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_dis,
+    disc TYPE char16,                  " Discount
+  END OF typ_dis.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the invoice details in inbound*
+* payment records                                                      *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_invoice,
+    lifnr TYPE lfb1-lifnr,             " Vendor Number
+    hbank TYPE char13,                 " House bank
+    belnr TYPE bkpf-belnr,             " Voucher ID
+    disc TYPE char16,                  " Discount
+  END OF typ_invoice.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the company codes records     *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_company_codes,
+    lifnr TYPE lfb1-lifnr,
+    bukrs TYPE lfb1-bukrs,
+  END OF typ_company_codes.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the company codes records     *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_pmt_methods,
+    zlsch TYPE t042z-zlsch,
+    text1 TYPE t042z-text1,
+  END OF typ_pmt_methods.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the vendor codes records      *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_vendor,
+    lifnr TYPE lfb1-lifnr,             " Vendor Number
+  END OF typ_vendor.
+
+*----------------------------------------------------------------------*
+* Types declaration of structure to hold the log contents              *
+*----------------------------------------------------------------------*
+
+TYPES:
+  BEGIN OF typ_logtable_line,
+    tab_line(142) TYPE c,
+  END OF typ_logtable_line.
+
+* Constants.............................................................
+
+CONSTANTS:
+  c_dot TYPE char1 VALUE '.',          " Character Dot
+  c_colon TYPE char1 VALUE ':',        " colon
+  c_star TYPE char1 VALUE '*',         " Star
+  c_farw_slash TYPE char1 VALUE '/',   " forward slash
+  c_back_slash TYPE char1 VALUE '\',   " forward slash
+  c_hyphen TYPE char1 VALUE '-',       " hyphenl
+  c_underscore TYPE char1 VALUE '_',   " Underscore
+  c_double_quotation TYPE char1 VALUE '"',
+                                       " double_quotation
+  c_award TYPE char5 VALUE 'CSV',      " Award
+  c_comma TYPE char1 VALUE ',',        " Comma
+  c_cmemo_doctyp  TYPE char1 VALUE 'C'," Credit memo document type
+  c_inv_doctyp TYPE char1 VALUE 'I',   " Invoice document type
+  c_flag_on TYPE char1 VALUE 'X',      " Flag on
+  c_flag_off  TYPE char1 VALUE space,  " Flag off
+  c_p1 TYPE char2 VALUE '&1',          " placeholder &1
+  c_p2 TYPE char2 VALUE '&2',          " placeholder &2
+  c_inbound TYPE char1 VALUE 'I',      " Outbound mode
+  c_app_server TYPE char1 VALUE 'A',   " App server
+  c_desktop TYPE char1 VALUE 'D',      " Desktop
+  c_ftp_on TYPE char1 VALUE 'F',       " FTP
+  c_ftp_host TYPE char2 VALUE 'FH',    " FTP Host
+  c_ftp_uname TYPE char2 VALUE 'FI',   " FTP User name
+  c_ftp_password TYPE char2 VALUE 'FP'," FTP Password
+  c_ftp_dir TYPE char2 VALUE 'FD',     " FTP Dir
+  c_usd TYPE char3 VALUE 'USD',        " USD
+  c_csv_extension TYPE string VALUE 'CSV',
+                                       " CSV extension
+  c_rtf_extension TYPE string VALUE 'rtf',
+                                       " RTF extension
+  c_configure TYPE char18 VALUE 'Quickpay_Configure',
+                                       " Config file
+  c_config_details TYPE char23 VALUE 'Quickpay_Config_Details',
+                                       " Config details file
+  c_ftp TYPE char6 VALUE 'ftp://',     " ftp
+  c_cheque TYPE char6 VALUE 'CHEQUE',  " Cheque string
+  c_check TYPE char5 VALUE 'CHECK'.    " Check string
+
+* Internal tables.......................................................
+
+*----------------------------------------------------------------------*
+* Declaration of internal table to hold the inbound payment records.   *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_payment_data TYPE STANDARD TABLE
+                    OF typ_payment_data
+          INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of internal table to hold the formatted records of inbo- *
+* und payment records                                                  *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_payment_bdcdata TYPE STANDARD TABLE
+                    OF typ_payment_bdcdata
+          INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of internal table to hold the header records of inbound  *
+* payment records                                                      *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_payment_bdcheader TYPE STANDARD TABLE
+                    OF typ_payment_bdcheader
+          INITIAL SIZE 0.
+
+* Begin of code insert for BNSF
+
+*----------------------------------------------------------------------*
+* Declaration of internal table to hold the success records of inbound *
+* payment records                                                      *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_success_bdc TYPE STANDARD TABLE
+                   OF typ_success_bdc
+         INITIAL SIZE 0.
+
+* End of code insert for BNSF
+
+*----------------------------------------------------------------------*
+* Declaration of internal table to hold the failed records in inbound  *
+* payment posting                                                      *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_error_data TYPE STANDARD TABLE
+                  OF typ_payment_bdcheader
+          INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the config setup data          *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_config_file TYPE STANDARD TABLE OF typ_config_file
+                      INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the config setup details       *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_config_details TYPE STANDARD TABLE OF typ_config_details
+                              INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the CSV formatted data         *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_config_csv TYPE truxs_t_text_data.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the CSV formatted payments data*
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_erecords_csv TYPE truxs_t_text_data.
+
+*----------------------------------------------------------------------*
+* Declaration of internal table to hold the company codes records      *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_company_codes TYPE STANDARD TABLE
+                     OF typ_company_codes
+           INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of internal table to hold the reference details in inbo- *
+* bound payment records                                                *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_reference TYPE STANDARD TABLE
+                 OF typ_reference
+       INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of internal table to hold the invoice details in inbound *
+* payment records                                                      *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_invoice TYPE STANDARD TABLE
+                 OF typ_invoice
+       INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of internal table to hold the batch input fields details *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_bdc_data TYPE STANDARD TABLE
+                   OF bdcdata
+         INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of internal table to hold the messages of a transaction  *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_bdc_messages TYPE STANDARD TABLE
+                    OF bdcmsgcoll
+             INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of internal table to hold the messages                   *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_messages TYPE STANDARD TABLE
+                OF bdcmsgcoll
+             INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the line data of input file in *
+* application server                                                   *
+*----------------------------------------------------------------------*
+
+DATA:
+gt_file_data TYPE truxs_t_text_data.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the inbound apyment process    *
+* details step by step for log file                                    *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_process_details TYPE STANDARD TABLE
+                       OF typ_logtable_line
+             INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the payment methods types      *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_pmt_methods TYPE STANDARD TABLE
+                       OF typ_pmt_methods
+             INITIAL SIZE 0.
+
+*----------------------------------------------------------------------*
+* Declaration of Internal table to hold the vednor records             *
+*----------------------------------------------------------------------*
+
+DATA:
+  gt_vendor TYPE SORTED TABLE
+                     OF typ_vendor
+        WITH UNIQUE KEY lifnr
+           INITIAL SIZE 0.
+
+* Field strings.........................................................
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the inbound payment records.     *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_payment_data  TYPE typ_payment_data.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the formatted records of inbound *
+* payment records                                                      *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_payment_bdcdata  TYPE typ_payment_bdcdata.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the header records of inbound    *
+* payment records                                                      *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_payment_bdcheader  TYPE typ_payment_bdcheader.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the success records of inbound   *
+* payment records                                                      *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_success_bdc  TYPE typ_success_bdc.
+
+*----------------------------------------------------------------------*
+* Declaration of Field string to hold the config setup data            *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_config_file TYPE typ_config_file.
+
+*----------------------------------------------------------------------*
+* Declaration of Field string to hold the config setup details         *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_config_details TYPE typ_config_details.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the CSV formatted data           *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_config_csv LIKE LINE OF gt_config_csv.
+
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the CSV formatted data           *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_erecords_csv LIKE LINE OF gt_erecords_csv.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the failed records in inbound    *
+* payment posting                                                      *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_error_data TYPE typ_payment_bdcheader.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the company codes records        *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_company_codes TYPE typ_company_codes.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the reference details in inbound *
+* payment records                                                      *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_reference TYPE typ_reference.
+
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the invoice details in inbound   *
+* payment records                                                      *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_invoice TYPE typ_invoice.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the batch input fields details   *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_bdc_data TYPE bdcdata.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the messages                     *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_bdc_messages TYPE bdcmsgcoll.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the messages                     *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_messages TYPE bdcmsgcoll.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the line data of input file in   *
+* application server                                                   *
+*----------------------------------------------------------------------*
+
+DATA:
+gs_file_data TYPE string.
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the inbound payment process      *
+* details step by step for log file                                    *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_process_details  TYPE typ_logtable_line.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the payment methods details      *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_pmt_methods  TYPE typ_pmt_methods.
+
+*----------------------------------------------------------------------*
+* Declaration of field string to hold the vendor records               *
+*----------------------------------------------------------------------*
+
+DATA:
+  gs_vendor  TYPE typ_vendor.
+
+* Global work variables.................................................
+
+DATA:
+  gv_cmd(160) TYPE c,                  " Command for FTP transfer
+  gv_cmd_cd TYPE char2 VALUE 'cd',     " ftp command cd
+  gv_cmd_ftppath TYPE string,          " file path in ftp
+
+  gv_er_filename TYPE string,          " Error record file name
+  gv_er_fullpath TYPE string,          " Inbound error file full path
+  gv_lg_fullpath TYPE string,          " Inbound log file full path
+  gv_lg_filename TYPE string,          " Log file name
+
+  gv_cmd_ascii TYPE char5 VALUE 'ascii',
+                                       " ftp command ascii
+  gv_cmd_dir TYPE char3 VALUE 'dir',   " ftp command dir
+  gv_cmd_lcd  TYPE char3 VALUE 'lcd',  " ftp command lcd
+  gv_cmd_get  TYPE char3  VALUE 'get', " ftp command get
+  gv_user TYPE char30,                 " FTP user name
+  gv_host TYPE char64,                 " FTP host address
+  gv_rfc  TYPE rfcdes-rfcdest VALUE 'SAPFTPA',
+                                       " Logical Destination
+  gv_pass TYPE char30,                 " FTP user password
+  gv_compress TYPE c VALUE 'N',        " Compress
+  gv_hdl TYPE i,                       " FTP Handle
+  gv_status TYPE string,               " Overall status
+  gv_timestamp TYPE timestamp,         " Time stamp
+  gv_ts_date  TYPE char8,              " Date in Time Stamp
+  gv_ts_time  TYPE char6,              " Time in Time Stamp
+  gv_current_time TYPE char8,          " Current time in HH:MM:SS
+  gv_current_date TYPE char10,         " Date in dd/mm/yyyy format
+  gv_dataset TYPE string,              " String
+  gv_appser_log TYPE string,           " VendorOutbound AppServer Log
+  gv_config_file TYPE string,          " Config data file
+  gv_config_details TYPE string,       " Config details file
+  gv_as TYPE char1,                    " Config app server
+  gv_desk TYPE char1,                  " Config desktop
+  gv_ftp TYPE char1,                   " Config ftp
+  gv_as_path TYPE string,              " Application server path
+  gv_as_apath TYPE dirname_al11,       " Application server path
+  gv_as_epath TYPE dirname_al11,       " Application server path
+  gv_ftp_path TYPE string,             " ftp path
+  gv_ftp_app_path TYPE dirname_al11,   " ftp to app server path
+  gv_stop_flag TYPE char1 VALUE '',    " Check input flag
+  gv_tot_amt TYPE vrtot,               " Total Amount
+  gv_tot_dis TYPE df05b-psskt.         " Total discount
+
+* Parameters............................................................
+
+SELECTION-SCREEN BEGIN OF BLOCK g1 WITH FRAME TITLE text-ibf.
+
+SELECTION-SCREEN COMMENT /1(79) gv_note.
+PARAMETERS:
+  p_dfile TYPE dxfile-filename OBLIGATORY,
+                                       " Desktop file path
+  p_efpath TYPE string OBLIGATORY,     " Error log file path
+  p_lfpath TYPE string OBLIGATORY,
+                                       " Log file path
+  p_fname TYPE string.                 " File name
+SELECTION-SCREEN END OF BLOCK g1.

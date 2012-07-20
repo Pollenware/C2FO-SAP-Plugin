@@ -41,4 +41,5 @@ Review the transport log for the transport files that were imported. Review this
 * [Functional specification, Inbound](https://github.com/Pollenware/C2FO-SAP-Plugin/blob/master/Specifications/FuncSpec_Interface_Inbound_V02.docx) 
 * [Functional specification, Outbound](https://github.com/Pollenware/C2FO-SAP-Plugin/blob/master/Specifications/FuncSpec_Interface_Outbound_V02.docx) 
 * [Technical specification, Inbound](https://github.com/Pollenware/C2FO-SAP-Plugin/blob/master/Specifications/TechSpec_Interface_Inbound_V02.docx) 
-* [Technical specification, Outbound](https://github.com/Pollenware/C2FO-SAP-Plugin/blob/master/Specifications/TechSpec_Interface_Outbound_V02.docx) 
+* [Technical specification, Outbound](https://github.com/Pollenware/C2FO-SAP-Plugin/blob/master/Specifications/TechSpec_Interface_Outbound_V02.docx)
+* [SAP vendor extraction demonstration on YouTube](http://www.youtube.com/watch?v=fEM7_nYKcEg)

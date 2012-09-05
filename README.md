@@ -36,12 +36,12 @@ Review the transport log for the transport files that were imported. Review this
 
 ## 4 Further Reading (in MS Word format)
 
-* [Installation guide](https://github.com/Pollenware/C2FO-SAP-Plugin/blob/master/Help/C2FO_SAPPlugin_InstallationGuide_V2.0.docx)
-* [Configuration guide](https://github.com/Pollenware/C2FO-SAP-Plugin/blob/master/Help/C2FO_SAPPlugin_ConfigurationGuide_V2.0.docx)
-* [Functional specification, Inbound](https://github.com/Pollenware/C2FO-SAP-Plugin/blob/master/Specifications/FuncSpec_Interface_Inbound_V02.docx) 
-* [Functional specification, Outbound](https://github.com/Pollenware/C2FO-SAP-Plugin/blob/master/Specifications/FuncSpec_Interface_Outbound_V02.docx) 
-* [Technical specification, Inbound](https://github.com/Pollenware/C2FO-SAP-Plugin/blob/master/Specifications/TechSpec_Interface_Inbound_V02.docx) 
-* [Technical specification, Outbound](https://github.com/Pollenware/C2FO-SAP-Plugin/blob/master/Specifications/TechSpec_Interface_Outbound_V02.docx)
+* [Installation guide](https://github.com/c2fo/C2FO-SAP-Plugin/blob/master/Help/C2FO_SAPPlugin_InstallationGuide_V2.0.docx)
+* [Configuration guide](https://github.com/c2fo/C2FO-SAP-Plugin/blob/master/Help/C2FO_SAPPlugin_ConfigurationGuide_V2.0.docx)
+* [Functional specification, Inbound](https://github.com/c2fo/C2FO-SAP-Plugin/blob/master/Specifications/FuncSpec_Interface_Inbound_V02.docx) 
+* [Functional specification, Outbound](https://github.com/c2fo/C2FO-SAP-Plugin/blob/master/Specifications/FuncSpec_Interface_Outbound_V02.docx) 
+* [Technical specification, Inbound](https://github.com/c2fo/C2FO-SAP-Plugin/blob/master/Specifications/TechSpec_Interface_Inbound_V02.docx) 
+* [Technical specification, Outbound](https://github.com/c2fo/C2FO-SAP-Plugin/blob/master/Specifications/TechSpec_Interface_Outbound_V02.docx)
 
 ## 5 How-To videos on YouTube
 
